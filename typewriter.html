@@ -44,20 +44,19 @@ button:hover{background:#0f0;
 </head>
 <body>
 
-<h2>▌ Typewriter</h2>
-<p><a href="/">← на главную</a></p>
+<h2 id="ttl">▌ Typewriter</h2>
+<p><a href="/" id="back"></a></p>
 
-<label>sid:
+<label id="sidLbl">sid:
   <input id="sid"
     inputmode="numeric"
     placeholder="12345">
 </label>
 
-<br><textarea id="txt"
-  placeholder="текст для игры">
+<br><textarea id="txt">
 </textarea>
 
-<button id="send">Отправить</button>
+<button id="send"></button>
 <div id="st"></div>
 
 <div id="prev"></div>
@@ -67,6 +66,55 @@ button:hover{background:#0f0;
 
 <script>
 "use strict";
+var LANG =
+  localStorage.getItem("lang")
+  || "ru";
+var T = {
+  ru: {
+    ttl: "▌ Typewriter",
+    back: "← на главную",
+    sid: "sid:",
+    txt: "текст для игры",
+    send: "Отправить",
+    bad: "sid — только цифры",
+    go: "отправка…",
+    ok: "отправлено ✔",
+    fail: "ошибка отправки",
+    down: "сервер недоступен",
+    url: "HTTP Transmitter: "
+  },
+  en: {
+    ttl: "▌ Typewriter",
+    back: "← back to home",
+    sid: "sid:",
+    txt: "text for the game",
+    send: "Send",
+    bad: "sid — digits only",
+    go: "sending…",
+    ok: "sent ✔",
+    fail: "send error",
+    down: "server unavailable",
+    url: "HTTP Transmitter: "
+  }
+}[LANG];
+
+document.documentElement.lang = LANG;
+document.getElementById("ttl")
+  .textContent = T.ttl;
+document.getElementById("back")
+  .textContent = T.back;
+document.getElementById("sidLbl")
+  .firstChild.textContent = T.sid
+    + " ";
+document.getElementById("txt")
+  .placeholder = T.txt;
+document.getElementById("send")
+  .textContent = T.send;
+document.getElementById("url")
+  .textContent = T.url +
+  location.origin +
+  "/text?sid=ваш-сид";
+
 var sidEl =
   document.getElementById("sid");
 var txtEl =
@@ -77,28 +125,22 @@ var prevEl =
   document.getElementById("prev");
 var curEl =
   document.getElementById("cur");
-var urlEl =
-  document.getElementById("url");
 var SPEED = parseInt(
   localStorage.getItem("type_speed")
   || "60", 10);
 var timer = null;
 
 curEl.style.display = "none";
-urlEl.textContent =
-  "HTTP Transmitter: " +
-  location.origin + "/text?sid=ваш-сид";
 
 document.getElementById("send")
   .addEventListener("click",
     function () {
       var sid = sidEl.value.trim();
       if (!/^\d+$/.test(sid)) {
-        stEl.textContent =
-          "sid — только цифры";
+        stEl.textContent = T.bad;
         return;
       }
-      stEl.textContent = "отправка…";
+      stEl.textContent = T.go;
       fetch("/api/send", {
         method: "POST",
         headers: {
@@ -112,17 +154,14 @@ document.getElementById("send")
       })
       .then(function (r) {
         if (r.ok) {
-          stEl.textContent =
-            "отправлено ✔";
+          stEl.textContent = T.ok;
           typeOut(txtEl.value);
         } else {
-          stEl.textContent =
-            "ошибка отправки";
+          stEl.textContent = T.fail;
         }
       })
       .catch(function () {
-        stEl.textContent =
-          "сервер недоступен";
+        stEl.textContent = T.down;
       });
     });
 
