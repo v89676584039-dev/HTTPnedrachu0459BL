@@ -8,7 +8,6 @@ DATA = {}
 
 # ---------- таблица символов Text Panel ----------
 
-# обычные символы: строчные буквы, цифры, знаки
 PANEL6 = {}
 for i, ch in enumerate("abcdefghijklmnopqrstuvwxyz"):
     PANEL6[ch] = format(i + 1, "06b")
@@ -26,8 +25,6 @@ PANEL6.update({
     "▲": "111010", "▶": "111011",
 })
 
-# SHIFT-ряд: заглавные буквы и верхние знаки.
-# значение — обычный символ, код которого берём из PANEL6
 SHIFT6 = {}
 for i, ch in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
     SHIFT6[ch] = "abcdefghijklmnopqrstuvwxyz"[i]
@@ -55,7 +52,7 @@ def _code(text, i):
         shift = True
         ch = SHIFT6[ch]
     code = PANEL6.get(ch.lower(), "000000")
-    return ("1" if shift else "0") + "0" + code
+    return "0" + ("1" if shift else "0") + code
 
 
 # ---------- страницы ----------
@@ -155,10 +152,8 @@ def text():
 
 
 # ---------- часы ----------
-# каждая цифра — свой вход: часы состоят из десятков и единиц,
-# каждая цифра отдаётся отдельным 6-битным кодом
-# ?d=0 — десятки, ?d=1 — единицы
-# пример: 23 часа -> ?d=0 даст 000010, ?d=1 даст 000011
+# каждая цифра — свой вход: ?d=0 — десятки, ?d=1 — единицы
+# ответ в JSON, как у /text: {"value": "000011"}
 # обычное число — через &mode=num
 
 def _offset():
@@ -169,6 +164,13 @@ def _offset():
         )
     except (ValueError, TypeError):
         return 0
+
+
+def _arg_int(name, default):
+    try:
+        return int(request.args.get(name, default))
+    except (ValueError, TypeError):
+        return default
 
 
 def _digit(value, d):
@@ -182,25 +184,39 @@ def _digit(value, d):
     return format(num, "06b")
 
 
+def _clock(value):
+    d = _arg_int("d", 0)
+    result = _digit(value, d)
+    if request.args.get("mode") == "num":
+        return result
+    return jsonify({"value": result})
+
+
 @app.route("/clock/hours")
 def clock_hours():
     t = time.localtime(
         time.time() + _offset() * 3600)
-    return _digit(t.tm_hour, int(request.args.get("d", 0)))
+    return _clock(t.tm_hour)
 
 
 @app.route("/clock/minutes")
 def clock_minutes():
     t = time.localtime(
         time.time() + _offset() * 3600)
-    return _digit(t.tm_min, int(request.args.get("d", 0)))
+    return _clock(t.tm_min)
 
 
 @app.route("/clock/seconds")
 def clock_seconds():
     t = time.localtime(
         time.time() + _offset() * 3600)
-    return _digit(t.tm_sec, int(request.args.get("d", 0)))
+    return _clock(t.tm_sec)
+
+
+# даже если что-то сломается, игра получит JSON, а не ошибку
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({"value": "000000"}), 500
 
 
 if __name__ == "__main__":
