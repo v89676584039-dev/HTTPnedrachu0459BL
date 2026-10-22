@@ -68,12 +68,18 @@ def api_data():
 @app.route("/text")
 def text():
     sid = request.args.get("sid", "").strip()
+    fmt = request.args.get("mode", "bin")
     if not sid:
         return jsonify({"value": ""})
     item = DATA.get(sid)
     if not item:
         return jsonify({"value": ""})
-    return jsonify({"value": item["text"]})
+    raw = item["text"]
+    if fmt == "bin":
+        raw = "".join(
+            format(b, "08b")
+            for b in raw.encode("utf-8"))
+    return jsonify({"value": raw})
 
 
 # ---------- часы ----------
