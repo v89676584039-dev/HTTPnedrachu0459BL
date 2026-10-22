@@ -5,469 +5,49 @@
 <meta name="viewport"
   content="width=device-width,
   initial-scale=1">
-<title>Рендер</title>
+<title>Home</title>
 <style>
 body{background:#111;color:#0f0;
-  font-family:monospace;padding:30px}
-h1{color:#0f0;font-size:2rem;
-  word-break:break-word}
-#clock{color:#ff0;font-size:1.3rem}
-#http{margin-top:15px;font-size:14px}
-#http input,#http button{
-  background:#000;color:#0f0;
+  font-family:monospace;
+  padding:30px}
+body.compact{padding:12px}
+h2{color:#0f0}
+a{color:#0f0}
+.dim{color:#888;font-size:13px}
+.menu a{display:block;color:#0f0;
   border:1px solid #0f0;
-  padding:4px 8px;
-  margin:4px 4px 4px 0}
-#http button{cursor:pointer}
-#http a{color:#0ff}
-#data{white-space:pre-wrap;
-  margin-top:20px;font-size:13px}
-#data .k{color:#66f}
-#data .s{color:#0f0}
-#data .n{color:#ff0}
-#data .p{color:#888}
-#menuBtn{position:fixed;top:10px;
-  right:10px;background:#222;
-  border:1px solid #0f0;color:#0f0;
-  font-size:20px;border-radius:8px;
-  padding:6px 14px;z-index:2}
-#menu{position:fixed;top:52px;
-  right:10px;background:#222;
-  border:1px solid #0f0;
-  border-radius:8px;padding:12px;
-  font-size:13px;max-width:270px;
-  max-height:80vh;overflow:auto;
-  z-index:1;display:none}
-#menu label{display:block;
-  margin:6px 0}
-#menu input,#menu select{
-  background:#000;color:#0f0;
-  border:1px solid #0f0;
-  max-width:130px}
-#cur{animation:bl 1s step-end
-  infinite}
-@keyframes bl{50%{opacity:0}}
+  padding:10px;margin:8px 0;
+  text-decoration:none}
+.menu a:hover{background:#0f0;
+  color:#000}
 </style>
 </head>
 <body>
 
-<h1>
-  <span id="tw"></span>
-  <span id="cur">▌</span>
-</h1>
-<div id="clock"></div>
+<h2>▌ Главная</h2>
+<p class="dim">инструменты и API
+  для Build Logic :)</p>
 
-<div id="http">
-  <b id="lblHttp">HTTP отправка</b><br>
-  <a href="/api/data" target="_blank">
-    /api/data</a> ·
-  <a href="/receiver"
-    target="_blank"
-    id="lblRecv">Приёмник</a><br>
-  <span id="lblSid">sid:</span>
-  <input id="sidInput"
-    inputmode="numeric"
-    placeholder="12345"
-    style="width:90px">
-  <button id="sendBtn">Отправить
-  </button>
-  <span id="httpMsg"></span>
+<div class="menu">
+  <a href="/typewriter">Typewriter
+    — отправка текста в игру</a>
+  <a href="/clock">Real-time Clock API
+    — часы</a>
+  <a href="/receiver">Приёмник
+    — просмотр по сиду</a>
+  <a href="/settings">Настройки</a>
 </div>
 
-<div id="data">загрузка…</div>
-
-<button id="menuBtn">☰</button>
-
-<div id="menu">
-  <b id="menuTitle">Меню</b>
-  <label>
-    <span id="lblLang">Язык:</span>
-    <select id="lang">
-      <option value="ru">Русский
-      </option>
-      <option value="en">English
-      </option>
-      <option value="es">Español
-      </option>
-    </select>
-  </label>
-  <hr>
-  <label>
-    <input type="checkbox"
-      id="twOn" checked>
-    <span id="lblTw">Typewriter
-    </span>
-  </label>
-  <label>
-    <span id="lblSpeed">Скорость,
-    мс:</span>
-    <input type="number"
-      id="twSpeed" value="70"
-      min="10">
-  </label>
-  <label>
-    <span id="lblText">Текст:</span>
-    <input type="text" id="twText"
-      value="Привет, мир!"
-      style="width:120px">
-  </label>
-  <hr>
-  <label>
-    <input type="checkbox"
-      id="clockOn" checked>
-    <span id="lblClock">Часы</span>
-  </label>
-  <label>
-    <span id="lblFmt">Формат:</span>
-    <select id="clockFmt">
-      <option value="24"
-        id="opt24">24-час</option>
-      <option value="12"
-        id="opt12">12-час</option>
-    </select>
-  </label>
-  <label>
-    <span id="lblOff">UTC offset:
-    </span>
-    <input type="number"
-      id="clockOffset" value="0"
-      step="1" min="-12" max="14">
-  </label>
-  <label>
-    <input type="checkbox"
-      id="offsetInTitle" checked>
-    <span id="lblOffTitle">
-    offset в заголовке</span>
-  </label>
-</div>
+<p class="dim">в HTTP Transmitter
+  для текста вставьте адрес
+  вашего сайта + /text?sid=ваш-сид</p>
 
 <script>
-"use strict";
-
-function byId(id) {
-  return document
-    .getElementById(id);
+if (localStorage.getItem("compact")
+    === "1") {
+  document.body.className =
+    "compact";
 }
-
-var cur = "ru";
-var L = {
-  ru: {
-    menu: "Меню",
-    lang: "Язык:",
-    tw: "Typewriter",
-    speed: "Скорость, мс:",
-    text: "Текст:",
-    clock: "Часы",
-    fmt: "Формат:",
-    f24: "24-час",
-    f12: "12-час",
-    off: "UTC offset:",
-    offTitle:
-      "offset в заголовке",
-    err: "Сервер недоступен: ",
-    hello: "Привет, мир!",
-    http: "HTTP отправка",
-    recv: "Приёмник",
-    sid: "sid:",
-    send: "Отправить",
-    sending: "отправка…",
-    ok: "отправлено ✔",
-    fail: "ошибка: ",
-    badSid: "только числа!"
-  },
-  en: {
-    menu: "Menu",
-    lang: "Language:",
-    tw: "Typewriter",
-    speed: "Speed, ms:",
-    text: "Text:",
-    clock: "Clock",
-    fmt: "Format:",
-    f24: "24-hour",
-    f12: "12-hour",
-    off: "UTC offset:",
-    offTitle: "offset in title",
-    err: "Server unavailable: ",
-    hello: "Hello, world!",
-    http: "HTTP sender",
-    recv: "Receiver",
-    sid: "sid:",
-    send: "Send",
-    sending: "sending…",
-    ok: "sent ✔",
-    fail: "error: ",
-    badSid: "numbers only!"
-  },
-  es: {
-    menu: "Menú",
-    lang: "Idioma:",
-    tw: "Typewriter",
-    speed: "Velocidad, ms:",
-    text: "Texto:",
-    clock: "Reloj",
-    fmt: "Formato:",
-    f24: "24 horas",
-    f12: "12 horas",
-    off: "UTC offset:",
-    offTitle: "offset en el título",
-    err:
-      "Servidor no disponible: ",
-    hello: "¡Hola, mundo!",
-    http: "Envío HTTP",
-    recv: "Receptor",
-    sid: "sid:",
-    send: "Enviar",
-    sending: "enviando…",
-    ok: "enviado ✔",
-    fail: "error: ",
-    badSid: "¡solo números!"
-  }
-};
-
-var twEl = byId("tw");
-var twOn = byId("twOn");
-var twSpeed = byId("twSpeed");
-var twText = byId("twText");
-var cursorEl = byId("cur");
-var clockOn = byId("clockOn");
-var clockFmt = byId("clockFmt");
-var clockOffset =
-  byId("clockOffset");
-var offsetInTitle =
-  byId("offsetInTitle");
-var clockEl = byId("clock");
-var dataEl = byId("data");
-var menuBtn = byId("menuBtn");
-var menu = byId("menu");
-var sidInput = byId("sidInput");
-var sendBtn = byId("sendBtn");
-var httpMsg = byId("httpMsg");
-var twTimer = null;
-
-function applyLang() {
-  var t = L[cur];
-  byId("menuTitle")
-    .textContent = t.menu;
-  byId("lblLang")
-    .textContent = t.lang;
-  byId("lblTw")
-    .textContent = t.tw;
-  byId("lblSpeed")
-    .textContent = t.speed;
-  byId("lblText")
-    .textContent = t.text;
-  byId("lblClock")
-    .textContent = t.clock;
-  byId("lblFmt")
-    .textContent = t.fmt;
-  byId("opt24")
-    .textContent = t.f24;
-  byId("opt12")
-    .textContent = t.f12;
-  byId("lblOff")
-    .textContent = t.off;
-  byId("lblOffTitle")
-    .textContent = t.offTitle;
-  byId("lblHttp")
-    .textContent = t.http;
-  byId("lblRecv")
-    .textContent = t.recv;
-  byId("lblSid")
-    .textContent = t.sid;
-  sendBtn.textContent = t.send;
-  twText.value = t.hello;
-  document.documentElement
-    .lang = cur;
-  typewrite();
-}
-
-byId("lang").onchange =
-  function () {
-    cur = this.value;
-    applyLang();
-  };
-
-menuBtn.onclick = function () {
-  menu.style.display =
-    menu.style.display === "block"
-    ? "none" : "block";
-};
-
-// --- typewriter ---
-function typewrite() {
-  clearInterval(twTimer);
-  var text = twText.value;
-  if (!twOn.checked) {
-    twEl.textContent = text;
-    cursorEl.style.display =
-      "none";
-    return;
-  }
-  cursorEl.style.display =
-    "inline";
-  var speed = Math.max(10,
-    Number(twSpeed.value) || 70);
-  var i = 0;
-  twEl.textContent = "";
-  twTimer = setInterval(
-    function () {
-      i = i + 1;
-      twEl.textContent =
-        text.slice(0, i);
-      if (i >= text.length) {
-        clearInterval(twTimer);
-        setTimeout(typewrite,
-          2500);
-      }
-    }, speed);
-}
-twOn.onchange = typewrite;
-twSpeed.oninput = typewrite;
-twText.oninput = typewrite;
-
-// --- часы ---
-function pad(x) {
-  return String(x)
-    .padStart(2, "0");
-}
-
-function fmtTime(d, use12) {
-  var h = d.getHours();
-  var suf = h < 12
-    ? " AM" : " PM";
-  if (use12) {
-    h = h % 12 || 12;
-  }
-  return pad(h) + ":"
-    + pad(d.getMinutes())
-    + ":" + pad(d.getSeconds())
-    + (use12 ? suf : "");
-}
-
-function utcTime(off) {
-  var now = new Date();
-  return new Date(
-    now.getTime()
-    + now.getTimezoneOffset()
-      * 60000
-    + off * 3600000);
-}
-
-function updateClock() {
-  var t = L[cur];
-  if (!clockOn.checked) {
-    clockEl.textContent = "";
-    document.title = "Рендер";
-    return;
-  }
-  var off =
-    Number(clockOffset.value) || 0;
-  var time = fmtTime(
-    utcTime(off),
-    clockFmt.value === "12");
-  clockEl.textContent = time;
-  document.title =
-    offsetInTitle.checked
-    ? time + " UTC"
-      + (off >= 0 ? "+" : "")
-      + off
-    : "Рендер";
-}
-clockOn.onchange = updateClock;
-clockFmt.onchange = updateClock;
-clockOffset.oninput =
-  updateClock;
-offsetInTitle.onchange =
-  updateClock;
-setInterval(updateClock, 1000);
-updateClock();
-
-// --- JSON с подсветкой ---
-function esc(s) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;");
-}
-
-function hl(obj) {
-  var raw = esc(
-    JSON.stringify(obj, null, 2));
-  return raw.replace(
-    /("(?:[^"\\]|\\.)*")(\s*:)?|(\b(?:true|false|null)\b)|(-?\d+(?:\.\d+)?)/g,
-    function (m, str, col,
-              bool, num) {
-      if (str) {
-        if (col) {
-          return '<span class="k">'
-            + str + "</span>"
-            + col;
-        }
-        return '<span class="s">'
-          + str + "</span>";
-      }
-      if (bool || num) {
-        return '<span class="n">'
-          + (bool || num)
-          + "</span>";
-      }
-      return m;
-    });
-}
-
-function load() {
-  fetch("/api/data")
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (d) {
-      dataEl.innerHTML = hl(d);
-    })
-    .catch(function () {
-      dataEl.textContent =
-        L[cur].err + "HTTP";
-    });
-}
-setInterval(load, 15000);
-load();
-
-// --- отправка sid ---
-sendBtn.onclick = function () {
-  var sid = sidInput.value.trim();
-  if (!/^\d+$/.test(sid)) {
-    httpMsg.textContent =
-      L[cur].badSid;
-    return;
-  }
-  httpMsg.textContent =
-    L[cur].sending;
-  fetch("/api/send", {
-    method: "POST",
-    headers: {
-      "Content-Type":
-        "application/json"
-    },
-    body: JSON.stringify({
-      sid: sid,
-      text: twText.value
-    })
-  })
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (d) {
-      httpMsg.textContent =
-        d.ok ? L[cur].ok
-        : L[cur].fail
-          + (d.error || "");
-      if (d.ok) { load(); }
-    })
-    .catch(function () {
-      httpMsg.textContent =
-        L[cur].fail + "HTTP";
-    });
-};
-
-applyLang();
 </script>
 </body>
 </html>
