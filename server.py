@@ -39,9 +39,10 @@ SHIFT6.update({
 })
 
 
-def _code(text, i):
+def _code(text, i, busy):
     """Код одного символа в 8 битах:
-    бит 1 — пустой, бит 2 — SHIFT, биты 3-8 — символ."""
+    бит 1 — SHIFT, бит 2 — индикатор печати,
+    биты 3-8 — символ."""
     if i >= len(text):
         if not text:
             return "00000000"
@@ -52,7 +53,7 @@ def _code(text, i):
         shift = True
         ch = SHIFT6[ch]
     code = PANEL6.get(ch.lower(), "000000")
-    return "0" + ("1" if shift else "0") + code
+    return ("1" if shift else "0") + ("1" if busy else "0") + code
 
 
 # ---------- страницы ----------
@@ -113,28 +114,35 @@ def api_data():
 
 
 # ---------- API для Build Logic ----------
-# печатная машинка: каждая просьба отдаёт код СЛЕДУЮЩЕЙ буквы,
-# 8 бит: пустой бит + SHIFT + 6 бит символа
+# печатная машинка: ответ 14 бит —
+# биты 1-6: статус — 100000 во время буквы, 000000 когда текст кончился
+# бит 7: SHIFT, бит 8: индикатор печати (горит, пока печатается буква)
+# биты 9-14: символ
+# пример: буква m -> 100000 0 1 001101 = 10000001001101
 
 @app.route("/text", methods=["GET", "POST"])
 def text():
     sid = request.args.get("sid", "").strip()
     fmt = request.args.get("mode", "panel")
     if not sid:
-        return jsonify({"value": "00000000"})
+        return jsonify({"value": "0" * 14})
     item = DATA.get(sid)
     if not item:
-        return jsonify({"value": "00000000"})
+        return jsonify({"value": "0" * 14})
 
     # отмотать указатель на начало
     if request.args.get("reset") == "1":
         item["pos"] = 0
-        return jsonify({"value": "00000000"})
+        return jsonify({"value": "0" * 14})
 
     # посмотреть конкретную букву, не двигая указатель
     idx = request.args.get("idx", "")
     if idx.isdigit():
-        return jsonify({"value": _code(item["text"], int(idx))})
+        j = int(idx)
+        n = len(item["text"])
+        if j >= n:
+            return jsonify({"value": "000000" + _code(item["text"], j, False)})
+        return jsonify({"value": "100000" + _code(item["text"], j, True)})
 
     i = item.get("pos", 0)
     if fmt == "text":
@@ -145,10 +153,18 @@ def text():
             item["pos"] = i + 1
         return jsonify({"value": value})
 
-    code = _code(item["text"], i)
-    if i < len(item["text"]):
-        item["pos"] = i + 1
-    return jsonify({"value": code})
+    n = len(item["text"])
+    if n == 0:
+        return jsonify({"value": "0" * 14})
+
+    # текст закончился: статус и индикатор гаснут,
+    # последняя буква держится на панели
+    if i >= n:
+        return jsonify({"value": "000000" + _code(item["text"], n - 1, False)})
+
+    # идёт буква: статус 100000, индикатор горит
+    item["pos"] = i + 1
+    return jsonify({"value": "100000" + _code(item["text"], i, True)})
 
 
 # ---------- часы ----------
