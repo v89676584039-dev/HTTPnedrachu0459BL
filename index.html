@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+  content="width=device-width,
+  initial-scale=1">
+<title>Рендер</title>
+<style>
+body {
+  background: #111;
+  color: #0f0;
+  font-family: monospace;
+  padding: 30px;
+}
+h1 { color: #0f0; font-size: 2rem; }
+#clock {
+  color: #ff0;
+  font-size: 1.3rem;
+}
+#menu {
+  position: fixed;
+  top: 10px; right: 10px;
+  background: #222;
+  border: 1px solid #0f0;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+}
+#menu label {
+  display: block;
+  margin: 6px 0;
+}
+#menu input, #menu select {
+  background: #000;
+  color: #0f0;
+  border: 1px solid #0f0;
+}
+#data {
+  white-space: pre-wrap;
+  margin-top: 20px;
+  font-size: 13px;
+}
+#data .k { color: #66f; }
+#data .s { color: #0f0; }
+#data .n { color: #ff0; }
+#data .p { color: #888; }
+#cursor {
+  animation: bl 1s step-end infinite;
+}
+@keyframes bl {
+  50% { opacity: 0; }
+}
+</style>
+</head>
+<body>
+
+<h1>
+  <span id="tw"></span>
+  <span id="cur">▌</span>
+</h1>
+<div id="clock"></div>
+<div id="data">загрузка…</div>
+
+<div id="menu">
+  <b>Меню</b>
+  <label>
+    <input type="checkbox"
+      id="twOn" checked>
+    Typewriter
+  </label>
+  <label>
+    Скорость, мс:
+    <input type="number"
+      id="twSpeed"
+      value="70" min="10">
+  </label>
+  <label>
+    Текст:
+    <input type="text" id="twText"
+      value="Привет, мир!"
+      style="width:120px">
+  </label>
+  <hr>
+  <label>
+    <input type="checkbox"
+      id="clockOn" checked>
+    Часы
+  </label>
+  <label>
+    Формат:
+    <select id="clockFmt">
+      <option value="24">24-час
+      </option>
+      <option value="12">12-час
+      </option>
+    </select>
+  </label>
+  <label>
+    UTC offset:
+    <input type="number"
+      id="clockOffset" value="0"
+      step="1" min="-12" max="14">
+  </label>
+  <label>
+    <input type="checkbox"
+      id="offsetInTitle" checked>
+    offset в заголовке
+  </label>
+</div>
+
+<script>
+"use strict";
+
+function byId(id) {
+  return document
+    .getElementById(id);
+}
+
+var twEl = byId("tw");
+var twOn = byId("twOn");
+var twSpeed = byId("twSpeed");
+var twText = byId("twText");
+var cursorEl = byId("cur");
+var clockOn = byId("clockOn");
+var clockFmt = byId("clockFmt");
+var clockOffset =
+  byId("clockOffset");
+var offsetInTitle =
+  byId("offsetInTitle");
+var clockEl = byId("clock");
+var dataEl = byId("data");
+var twTimer = null;
+
+// --- typewriter ---
+function typewrite() {
+  clearInterval(twTimer);
+  var text = twText.value;
+  if (!twOn.checked) {
+    twEl.textContent = text;
+    cursorEl.style.display =
+      "none";
+    return;
+  }
+  cursorEl.style.display =
+    "inline";
+  var speed = Math.max(10,
+    Number(twSpeed.value) || 70);
+  var i = 0;
+  twEl.textContent = "";
+  twTimer = setInterval(
+    function () {
+      i = i + 1;
+      twEl.textContent =
+        text.slice(0, i);
+      if (i >= text.length) {
+        clearInterval(twTimer);
+        setTimeout(typewrite,
+          2500);
+      }
+    }, speed);
+}
+
+// --- часы ---
+function fmtTime(d, use12) {
+  var h = d.getHours();
+  var suf = h < 12
+    ? " AM" : " PM";
+  if (use12) {
+    h = h % 12 || 12;
+  }
+  function p(x) {
+    return String(x)
+      .padStart(2, "0");
+  }
+  return p(h) + ":"
+    + p(d.getMinutes()) + ":"
+    + p(d.getSeconds())
+    + (use12 ? suf : "");
+}
+
+function utcTime(off) {
+  var now = new Date();
+  return new Date(
+    now.getTime()
+    + now.getTimezoneOffset()
+      * 60000
+    + off * 3600000);
+}
+
+function updateClock() {
+  if (!clockOn.checked) {
+    clockEl.textContent = "";
+    document.title = "Рендер";
+    return;
+  }
+  var off =
+    Number(clockOffset.value) || 0;
+  var t = fmtTime(utcTime(off),
+    clockFmt.value === "12");
+  clockEl.textContent = t;
+  var sign = off >= 0 ? "+" : "";
+  document.title =
+    offsetInTitle.checked
+    ? "Часы (UTC" + sign + off
+      + ") " + t
+    : "Часы " + t;
+}
+
+// --- JSON с подсветкой ---
+function esc(s) {
+  return s.replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function hl(v, ind) {
+  var pad =
+    new Array(ind + 1).join("  ");
+  var t = typeof v;
+  if (v === null) {
+    return '<span class="n">null'
+      + '</span>';
+  }
+  if (t === "string") {
+    return '<span class="s">"'
+      + esc(v) + '"</span>';
+  }
+  if (t === "number"
+      || t === "boolean") {
+    return '<span class="n">'
+      + v + '</span>';
+  }
+  var out, keys, i;
+  if (Array.isArray(v)) {
+    if (!v.length) {
+      return '<span class="p">[]'
+        + '</span>';
+    }
+    out = '<span class="p">[</span>'
+      + "\n";
+    for (i = 0; i < v.length; i++) {
+      out += pad + "  "
+        + hl(v[i], ind + 1);
+      if (i < v.length - 1) {
+        out += ",";
+      }
+      out += "\n";
+    }
+    return out + pad
+      + '<span class="p">]</span>';
+  }
+  keys = Object.keys(v);
+  if (!keys.length) {
+    return '<span class="p">{}</span>';
+  }
+  out = '<span class="p">{</span>'
+    + "\n";
+  for (i = 0; i < keys.length; i++) {
+    out += pad + '  '
+      + '<span class="k">"'
+      + esc(keys[i])
+      + '"</span>: '
+      + hl(v[keys[i]], ind + 1);
+    if (i < keys.length - 1) {
+      out += ",";
+    }
+    out += "\n";
+  }
+  return out + pad
+    + '<span class="p">}</span>';
+}
+
+function loadData() {
+  fetch("/api/data")
+    .then(function (r) {
+      if (!r.ok) {
+        throw new Error(
+          "HTTP " + r.status);
+      }
+      return r.json();
+    })
+    .then(function (j) {
+      dataEl.innerHTML = hl(j, 0);
+    })
+    .catch(function (e) {
+      dataEl.textContent =
+        "Сервер недоступен: "
+        + e.message;
+    });
+}
+
+// --- события ---
+twOn.addEventListener(
+  "change", typewrite);
+twSpeed.addEventListener(
+  "input", typewrite);
+twText.addEventListener(
+  "input", typewrite);
+clockOn.addEventListener(
+  "change", updateClock);
+clockFmt.addEventListener(
+  "change", updateClock);
+clockOffset.addEventListener(
+  "input", updateClock);
+offsetInTitle.addEventListener(
+  "change", updateClock);
+
+// --- старт ---
+typewrite();
+updateClock();
+loadData();
+setInterval(updateClock, 500);
+setInterval(loadData, 15000);
+</script>
+</body>
+</html>
