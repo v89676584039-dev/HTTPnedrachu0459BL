@@ -1,145 +1,113 @@
-import json
-import os
-import urllib.parse
-from datetime import datetime, timedelta, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from flask import Flask, request, jsonify, send_from_directory
+import time
 
-PORT = int(os.environ.get("PORT", 10000))
+app = Flask(__name__, static_folder=None)
 
-# сид -> {"text": ..., "sid_at": ...}
+# хранилище: сид -> {"text": ..., "sid_at": ...}
 DATA = {}
 
 
-def _sid_and_offset(path):
-    q = urllib.parse.parse_qs(
-        urllib.parse.urlparse(path).query)
-    sid = (q.get("sid") or [""])[0].strip()
-    off = 0
-    if "offset" in q:
-        try:
-            off = int(q["offset"][0])
-        except ValueError:
-            pass
-    return sid, off
+# ---------- страницы ----------
+
+@app.route("/")
+def index():
+    return send_from_directory(".", "index.html")
 
 
-class Handler(BaseHTTPRequestHandler):
-
-    def _send(self, code, ctype, body):
-        if isinstance(body, str):
-            body = body.encode("utf-8")
-        self.send_response(code)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length",
-            str(len(body)))
-        self.send_header("Cache-Control",
-            "no-store")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _file(self, name, ctype):
-        try:
-            with open(name, "rb") as f:
-                self._send(200, ctype, f.read())
-        except FileNotFoundError:
-            self._send(404,
-                "text/plain; charset=utf-8",
-                "not found")
-
-    def _clock(self, part):
-        _, off = _sid_and_offset(self.path)
-        now = datetime.now(timezone.utc) \
-            + timedelta(hours=off)
-        value = getattr(now, part)
-        self._send(200,
-            "text/plain; charset=utf-8",
-            str(value))
-
-    def do_GET(self):
-        path = urllib.parse.urlparse(
-            self.path).path
-        sid, _ = _sid_and_offset(self.path)
-        if path == "/":
-            self._file("index.html",
-                "text/html; charset=utf-8")
-        elif path == "/typewriter":
-            self._file("typewriter.html",
-                "text/html; charset=utf-8")
-        elif path == "/clock":
-            self._file("clock.html",
-                "text/html; charset=utf-8")
-        elif path == "/receiver":
-            self._file("receiver.html",
-                "text/html; charset=utf-8")
-        elif path == "/settings":
-            self._file("settings.html",
-                "text/html; charset=utf-8")
-        elif path == "/api/data":
-            rec = DATA.get(sid)
-            if rec:
-                self._send(200,
-                    "application/json; charset=utf-8",
-                    json.dumps({
-                        "sid": sid,
-                        "text": rec["text"],
-                        "sid_at": rec["sid_at"]
-                    }, ensure_ascii=False))
-            else:
-                self._send(200,
-                    "application/json; charset=utf-8",
-                    json.dumps({"sid": "",
-                        "text": "", "sid_at": ""}))
-        elif path == "/text":
-            rec = DATA.get(sid)
-            self._send(200,
-                "text/plain; charset=utf-8",
-                rec["text"] if rec else "")
-        elif path == "/clock/hours":
-            self._clock("hour")
-        elif path == "/clock/minutes":
-            self._clock("minute")
-        elif path == "/clock/seconds":
-            self._clock("second")
-        else:
-            self._send(404,
-                "text/plain; charset=utf-8",
-                "not found")
-
-    def do_POST(self):
-        if self.path.split("?")[0] != "/api/send":
-            self._send(404,
-                "text/plain; charset=utf-8",
-                "not found")
-            return
-        try:
-            length = int(
-                self.headers.get(
-                    "Content-Length", 0))
-            body = json.loads(
-                self.rfile.read(length) or b"{}")
-        except (ValueError,
-                json.JSONDecodeError):
-            self._send(400,
-                "application/json; charset=utf-8",
-                json.dumps({"ok": False,
-                    "error": "bad json"}))
-            return
-        sid = str(body.get("sid", "")).strip()
-        if not sid.isdigit():
-            self._send(400,
-                "application/json; charset=utf-8",
-                json.dumps({"ok": False,
-                    "error": "sid must be digits"}))
-            return
-        DATA[sid] = {
-            "text": str(body.get("text", "")),
-            "sid_at": datetime.now(
-                timezone.utc).strftime("%H:%M:%S UTC")
-        }
-        self._send(200,
-            "application/json; charset=utf-8",
-            json.dumps({"ok": True}))
+@app.route("/typewriter")
+def typewriter():
+    return send_from_directory(".", "typewriter.html")
 
 
-HTTPServer(("0.0.0.0", PORT),
-    Handler).serve_forever()
+@app.route("/clock")
+def clock_page():
+    return send_from_directory(".", "clock.html")
+
+
+@app.route("/receiver")
+def receiver():
+    return send_from_directory(".", "receiver.html")
+
+
+@app.route("/settings")
+def settings():
+    return send_from_directory(".", "settings.html")
+
+
+# ---------- API для сайта ----------
+
+@app.route("/api/send", methods=["POST"])
+def api_send():
+    body = request.get_json(silent=True) or {}
+    sid = str(body.get("sid", "")).strip()
+    text = str(body.get("text", ""))
+    if not sid or not sid.isdigit():
+        return jsonify({"ok": False}), 400
+    DATA[sid] = {
+        "text": text,
+        "sid_at": time.strftime("%H:%M:%S")
+    }
+    return jsonify({"ok": True})
+
+
+@app.route("/api/data")
+def api_data():
+    sid = request.args.get("sid", "").strip()
+    item = DATA.get(sid)
+    if not item:
+        return jsonify({})
+    return jsonify({
+        "sid": sid,
+        "text": item["text"],
+        "sid_at": item["sid_at"]
+    })
+
+
+# ---------- API для Build Logic ----------
+
+@app.route("/text")
+def text():
+    sid = request.args.get("sid", "").strip()
+    if not sid:
+        return jsonify({"value": ""})
+    item = DATA.get(sid)
+    if not item:
+        return jsonify({"value": ""})
+    return jsonify({"value": item["text"]})
+
+
+# ---------- часы ----------
+
+def _offset():
+    try:
+        return int(
+            request.args.get("offset",
+              request.headers.get("offset", "0"))
+        )
+    except (ValueError, TypeError):
+        return 0
+
+
+@app.route("/clock/hours")
+def clock_hours():
+    t = time.localtime(
+        time.time() + _offset() * 3600)
+    return str(t.tm_hour)
+
+
+@app.route("/clock/minutes")
+def clock_minutes():
+    t = time.localtime(
+        time.time() + _offset() * 3600)
+    return str(t.tm_min)
+
+
+@app.route("/clock/seconds")
+def clock_seconds():
+    t = time.localtime(
+        time.time() + _offset() * 3600)
+    return str(t.tm_sec)
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
