@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+  content="width=device-width,
+  initial-scale=1">
+<title>Настройки</title>
+<style>
+body{background:#111;color:#0f0;
+  font-family:monospace;
+  padding:30px}
+body.compact{padding:12px}
+h2{color:#0f0}
+a{color:#0f0}
+input,select{background:#000;
+  color:#0f0;border:1px solid #0f0;
+  padding:6px 10px;
+  font-family:monospace}
+button{background:#000;color:#0f0;
+  border:1px solid #0f0;
+  padding:8px 16px;
+  font-family:monospace;
+  margin-top:10px;cursor:pointer}
+button:hover{background:#0f0;
+  color:#000}
+#st{margin-top:10px;
+  font-size:13px;color:#888}
+label{display:block;margin:10px 0}
+</style>
+</head>
+<body>
+
+<h2 id="ttl">▌ Настройки</h2>
+<p><a href="/"
+  id="back">← на главную</a></p>
+
+<label id="langLbl">язык:
+  <select id="lg">
+    <option value="ru">русский</option>
+    <option value="en">english</option>
+  </select>
+</label>
+
+<label id="spLbl">скорость печати,
+  мс на букву:
+  <input id="sp" type="number"
+    min="10" max="500">
+</label>
+
+<label>
+  <input id="cp" type="checkbox">
+  <span id="cpLbl">компактный
+    режим</span>
+</label>
+
+<button id="save">Сохранить</button>
+<div id="st"></div>
+
+<script>
+"use strict";
+var LANG =
+  localStorage.getItem("lang")
+  || "ru";
+var T = {
+  ru: {
+    ttl: "▌ Настройки",
+    back: "← на главную",
+    langLbl: "язык:",
+    spLbl: "скорость печати," +
+      " мс на букву:",
+    cpLbl: "компактный режим",
+    save: "Сохранить",
+    saved: "сохранено ✔",
+    err: "скорость — число от 10 до 500"
+  },
+  en: {
+    ttl: "▌ Settings",
+    back: "← back to home",
+    langLbl: "language:",
+    spLbl: "typing speed, ms" +
+      " per letter:",
+    cpLbl: "compact mode",
+    save: "Save",
+    saved: "saved ✔",
+    err: "speed must be 10..500"
+  }
+}[LANG];
+
+document.documentElement.lang = LANG;
+document.getElementById("ttl")
+  .textContent = T.ttl;
+document.getElementById("back")
+  .textContent = T.back;
+document.getElementById("langLbl")
+  .firstChild.textContent = T.langLbl
+    + " ";
+document.getElementById("spLbl")
+  .firstChild.textContent = T.spLbl
+    + " ";
+document.getElementById("cpLbl")
+  .textContent = T.cpLbl;
+document.getElementById("save")
+  .textContent = T.save;
+
+var spEl =
+  document.getElementById("sp");
+var cpEl =
+  document.getElementById("cp");
+var lgEl =
+  document.getElementById("lg");
+var stEl =
+  document.getElementById("st");
+spEl.value = parseInt(
+  localStorage.getItem("type_speed")
+  || "60", 10);
+cpEl.checked =
+  localStorage.getItem("compact")
+  === "1";
+lgEl.value = LANG;
+
+document.getElementById("save")
+  .addEventListener("click",
+    function () {
+      var v = parseInt(spEl.value, 10);
+      if (!(v >= 10 && v <= 500)) {
+        stEl.textContent = T.err;
+        return;
+      }
+      localStorage.setItem(
+        "type_speed", v);
+      localStorage.setItem("compact",
+        cpEl.checked ? "1" : "0");
+      localStorage.setItem("lang",
+        lgEl.value);
+      stEl.textContent = T.saved;
+    });
+
+if (localStorage.getItem("compact")
+    === "1") {
+  document.body.className =
+    "compact";
+}
+</script>
+</body>
+</html>
