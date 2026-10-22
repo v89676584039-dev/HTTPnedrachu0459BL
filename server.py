@@ -1,76 +1,145 @@
 import json
 import os
-from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import urllib.parse
+from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
-DATA = {
-    "message": "Привет! Это данные с сервера",
-    "status": "ok",
-    "count": 42,
-    "nested": {"nested": True},
-    "items": ["a", "b", "числа", 42],
-    "sid": "",
-    "text": "",
-    "sid_at": ""
-}
+PORT = int(os.environ.get("PORT", 10000))
 
-def read_file(path):
-    with open(path, "rb") as f:
-        return f.read()
+# сид -> {"text": ..., "sid_at": ...}
+DATA = {}
 
-def as_json(obj):
-    return json.dumps(obj, ensure_ascii=False).encode("utf-8")
+
+def _sid_and_offset(path):
+    q = urllib.parse.parse_qs(
+        urllib.parse.urlparse(path).query)
+    sid = (q.get("sid") or [""])[0].strip()
+    off = 0
+    if "offset" in q:
+        try:
+            off = int(q["offset"][0])
+        except ValueError:
+            pass
+    return sid, off
+
 
 class Handler(BaseHTTPRequestHandler):
+
     def _send(self, code, ctype, body):
+        if isinstance(body, str):
+            body = body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length",
+            str(len(body)))
+        self.send_header("Cache-Control",
+            "no-store")
         self.end_headers()
         self.wfile.write(body)
 
+    def _file(self, name, ctype):
+        try:
+            with open(name, "rb") as f:
+                self._send(200, ctype, f.read())
+        except FileNotFoundError:
+            self._send(404,
+                "text/plain; charset=utf-8",
+                "not found")
+
+    def _clock(self, part):
+        _, off = _sid_and_offset(self.path)
+        now = datetime.now(timezone.utc) \
+            + timedelta(hours=off)
+        value = getattr(now, part)
+        self._send(200,
+            "text/plain; charset=utf-8",
+            str(value))
+
     def do_GET(self):
-        if self.path == "/api/data":
-            DATA["updated_at"] = datetime.now(timezone.utc).isoformat()
-            self._send(200, "application/json; charset=utf-8", as_json(DATA))
-        elif self.path in ("/", "/index.html"):
-            self._send(200, "text/html; charset=utf-8", read_file("index.html"))
-        elif self.path in ("/receiver", "/receiver.html"):
-            self._send(200, "text/html; charset=utf-8", read_file("receiver.html"))
+        path = urllib.parse.urlparse(
+            self.path).path
+        sid, _ = _sid_and_offset(self.path)
+        if path == "/":
+            self._file("index.html",
+                "text/html; charset=utf-8")
+        elif path == "/typewriter":
+            self._file("typewriter.html",
+                "text/html; charset=utf-8")
+        elif path == "/clock":
+            self._file("clock.html",
+                "text/html; charset=utf-8")
+        elif path == "/receiver":
+            self._file("receiver.html",
+                "text/html; charset=utf-8")
+        elif path == "/settings":
+            self._file("settings.html",
+                "text/html; charset=utf-8")
+        elif path == "/api/data":
+            rec = DATA.get(sid)
+            if rec:
+                self._send(200,
+                    "application/json; charset=utf-8",
+                    json.dumps({
+                        "sid": sid,
+                        "text": rec["text"],
+                        "sid_at": rec["sid_at"]
+                    }, ensure_ascii=False))
+            else:
+                self._send(200,
+                    "application/json; charset=utf-8",
+                    json.dumps({"sid": "",
+                        "text": "", "sid_at": ""}))
+        elif path == "/text":
+            rec = DATA.get(sid)
+            self._send(200,
+                "text/plain; charset=utf-8",
+                rec["text"] if rec else "")
+        elif path == "/clock/hours":
+            self._clock("hour")
+        elif path == "/clock/minutes":
+            self._clock("minute")
+        elif path == "/clock/seconds":
+            self._clock("second")
         else:
-            self._send(404, "application/json; charset=utf-8", b'{"error": "not found"}')
+            self._send(404,
+                "text/plain; charset=utf-8",
+                "not found")
 
     def do_POST(self):
-        if self.path != "/api/send":
-            self._send(404, "application/json; charset=utf-8", b'{"error": "not found"}')
+        if self.path.split("?")[0] != "/api/send":
+            self._send(404,
+                "text/plain; charset=utf-8",
+                "not found")
             return
-        length = int(self.headers.get("Content-Length", 0))
-        raw = self.rfile.read(length)
         try:
-            req = json.loads(raw.decode("utf-8"))
-        except Exception:
-            req = {}
-        sid = str(req.get("sid", "")).strip()
-        text = str(req.get("text", ""))
-        if not sid.isdigit():
-            self._send(400, "application/json; charset=utf-8", as_json({
-                "ok": False,
-                "error": "sid: только числа"
-            }))
+            length = int(
+                self.headers.get(
+                    "Content-Length", 0))
+            body = json.loads(
+                self.rfile.read(length) or b"{}")
+        except (ValueError,
+                json.JSONDecodeError):
+            self._send(400,
+                "application/json; charset=utf-8",
+                json.dumps({"ok": False,
+                    "error": "bad json"}))
             return
-        DATA["sid"] = sid
-        DATA["text"] = text
-        DATA["sid_at"] = datetime.now(timezone.utc).isoformat()
-        self._send(200, "application/json; charset=utf-8", as_json({
-            "ok": True,
-            "sid": sid,
-            "text": text
-        }))
+        sid = str(body.get("sid", "")).strip()
+        if not sid.isdigit():
+            self._send(400,
+                "application/json; charset=utf-8",
+                json.dumps({"ok": False,
+                    "error": "sid must be digits"}))
+            return
+        DATA[sid] = {
+            "text": str(body.get("text", "")),
+            "sid_at": datetime.now(
+                timezone.utc).strftime("%H:%M:%S UTC")
+        }
+        self._send(200,
+            "application/json; charset=utf-8",
+            json.dumps({"ok": True}))
 
-    def log_message(self, *args):
-        pass
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    print("Server on port", port)
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+HTTPServer(("0.0.0.0", PORT),
+    Handler).serve_forever()
