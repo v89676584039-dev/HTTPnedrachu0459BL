@@ -19,34 +19,77 @@ li{margin:8px 0}
 </head>
 <body>
 
-<h2>▌ Real-time Clock API</h2>
-<p><a href="/">← на главную</a></p>
+<h2 id="ttl">▌ Real-time Clock API</h2>
+<p><a href="/" id="back"></a></p>
 
-<p class="dim">каждый адрес отдаёт
-  только число — вставляйте в
-  HTTP Transmitter как есть</p>
+<p class="dim" id="sub"></p>
 
 <ul id="list"></ul>
 
-<p class="dim">часовой пояс:
-  добавьте к адресу ?offset=N
-  (в Краснодаре UTC+3 — offset=3),
-  либо передайте заголовок
-  offset: N</p>
+<p class="dim" id="off"></p>
 
 <div id="now" class="dim"></div>
 
 <script>
 "use strict";
+var LANG =
+  localStorage.getItem("lang")
+  || "ru";
+var T = {
+  ru: {
+    ttl: "▌ Real-time Clock API",
+    back: "← на главную",
+    sub: "каждый адрес отдаёт" +
+      " только число — вставляйте в" +
+      " HTTP Transmitter как есть",
+    off: "часовой пояс: добавьте" +
+      " к адресу ?offset=N" +
+      " (в Краснодаре UTC+3 — offset=3)," +
+      " либо передайте заголовок" +
+      " offset: N",
+    now: "сейчас: ",
+    by: " (по вашему браузеру)",
+    hrs: "часы",
+    min: "минуты",
+    sec: "секунды"
+  },
+  en: {
+    ttl: "▌ Real-time Clock API",
+    back: "← back to home",
+    sub: "each address returns" +
+      " just a number — paste it" +
+      " into HTTP Transmitter as is",
+    off: "time zone: add ?offset=N" +
+      " to the address" +
+      " (UTC+3 — offset=3)," +
+      " or send header offset: N",
+    now: "now: ",
+    by: " (your browser time)",
+    hrs: "hours",
+    min: "minutes",
+    sec: "seconds"
+  }
+}[LANG];
+
+document.documentElement.lang = LANG;
+document.getElementById("ttl")
+  .textContent = T.ttl;
+document.getElementById("back")
+  .textContent = T.back;
+document.getElementById("sub")
+  .textContent = T.sub;
+document.getElementById("off")
+  .textContent = T.off;
+
 var base = location.origin;
 var listEl =
   document.getElementById("list");
 var nowEl =
   document.getElementById("now");
 [
-  ["часы", "/clock/hours"],
-  ["минуты", "/clock/minutes"],
-  ["секунды", "/clock/seconds"]
+  [T.hrs, "/clock/hours"],
+  [T.min, "/clock/minutes"],
+  [T.sec, "/clock/seconds"]
 ].forEach(function (r) {
   var li =
     document.createElement("li");
@@ -61,10 +104,9 @@ function tick() {
     return (v < 10 ? "0" : "") + v;
   };
   nowEl.textContent =
-    "сейчас: " + p(n.getHours()) +
+    T.now + p(n.getHours()) +
     ":" + p(n.getMinutes()) +
-    ":" + p(n.getSeconds()) +
-    " (по вашему браузеру)";
+    ":" + p(n.getSeconds()) + T.by;
 }
 setInterval(tick, 1000);
 tick();
