@@ -116,7 +116,7 @@ def api_data():
 
 
 # ---------- API для Build Logic ----------
-# каждая просьба отдаёт код СЛЕДУЮЩЕЙ буквы,
+# печатная машинка: каждая просьба отдаёт код СЛЕДУЮЩЕЙ буквы,
 # 8 бит: пустой бит + SHIFT + 6 бит символа
 
 @app.route("/text", methods=["GET", "POST"])
@@ -155,6 +155,11 @@ def text():
 
 
 # ---------- часы ----------
+# каждая цифра — свой вход: часы состоят из десятков и единиц,
+# каждая цифра отдаётся отдельным 6-битным кодом
+# ?d=0 — десятки, ?d=1 — единицы
+# пример: 23 часа -> ?d=0 даст 000010, ?d=1 даст 000011
+# обычное число — через &mode=num
 
 def _offset():
     try:
@@ -166,25 +171,36 @@ def _offset():
         return 0
 
 
+def _digit(value, d):
+    s = str(value).zfill(2)
+    try:
+        num = int(s[d])
+    except (IndexError, ValueError):
+        num = 0
+    if request.args.get("mode") == "num":
+        return str(num)
+    return format(num, "06b")
+
+
 @app.route("/clock/hours")
 def clock_hours():
     t = time.localtime(
         time.time() + _offset() * 3600)
-    return str(t.tm_hour)
+    return _digit(t.tm_hour, int(request.args.get("d", 0)))
 
 
 @app.route("/clock/minutes")
 def clock_minutes():
     t = time.localtime(
         time.time() + _offset() * 3600)
-    return str(t.tm_min)
+    return _digit(t.tm_min, int(request.args.get("d", 0)))
 
 
 @app.route("/clock/seconds")
 def clock_seconds():
     t = time.localtime(
         time.time() + _offset() * 3600)
-    return str(t.tm_sec)
+    return _digit(t.tm_sec, int(request.args.get("d", 0)))
 
 
 if __name__ == "__main__":
