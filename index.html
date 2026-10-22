@@ -24,25 +24,73 @@ a{color:#0f0}
 </head>
 <body>
 
-<h2>▌ Главная</h2>
-<p class="dim">инструменты и API
-  для Build Logic :)</p>
+<h2 id="ttl">▌ Главная</h2>
+<p class="dim" id="sub"></p>
 
-<div class="menu">
-  <a href="/typewriter">Typewriter
-    — отправка текста в игру</a>
-  <a href="/clock">Real-time Clock API
-    — часы</a>
-  <a href="/receiver">Приёмник
-    — просмотр по сиду</a>
-  <a href="/settings">Настройки</a>
-</div>
+<div class="menu" id="menu"></div>
 
-<p class="dim">в HTTP Transmitter
-  для текста вставьте адрес
-  вашего сайта + /text?sid=ваш-сид</p>
+<p class="dim" id="hint"></p>
 
 <script>
+"use strict";
+var LANG =
+  localStorage.getItem("lang")
+  || "ru";
+var T = {
+  ru: {
+    ttl: "▌ Главная",
+    sub: "инструменты и API" +
+      " для Build Logic :)",
+    tw: "Typewriter — отправка" +
+      " текста в игру",
+    ck: "Real-time Clock API" +
+      " — часы",
+    rc: "Приёмник — просмотр" +
+      " по сиду",
+    st: "Настройки",
+    hint: "в HTTP Transmitter" +
+      " для текста вставьте адрес" +
+      " вашего сайта + /text?sid=ваш-сид"
+  },
+  en: {
+    ttl: "▌ Home",
+    sub: "tools and API" +
+      " for Build Logic :)",
+    tw: "Typewriter — send" +
+      " text into the game",
+    ck: "Real-time Clock API" +
+      " — clock",
+    rc: "Receiver — view by sid",
+    st: "Settings",
+    hint: "in HTTP Transmitter" +
+      " use your site address" +
+      " + /text?sid=your-sid"
+  }
+}[LANG];
+
+document.documentElement.lang = LANG;
+document.getElementById("ttl")
+  .textContent = T.ttl;
+document.getElementById("sub")
+  .textContent = T.sub;
+document.getElementById("hint")
+  .textContent = T.hint;
+
+var menuEl =
+  document.getElementById("menu");
+[
+  ["/typewriter", T.tw],
+  ["/clock", T.ck],
+  ["/receiver", T.rc],
+  ["/settings", T.st]
+].forEach(function (m) {
+  var a =
+    document.createElement("a");
+  a.href = m[0];
+  a.textContent = m[1];
+  menuEl.appendChild(a);
+});
+
 if (localStorage.getItem("compact")
     === "1") {
   document.body.className =
