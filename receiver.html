@@ -33,24 +33,61 @@ input{background:#000;color:#0f0;
 </head>
 <body>
 
-<h2>▌ Приёмник</h2>
-<p><a href="/">← на главную</a></p>
+<h2 id="ttl">▌ Приёмник</h2>
+<p><a href="/" id="back"></a></p>
 
-<label>sid:
+<label id="sidLbl">sid:
   <input id="sid"
     inputmode="numeric"
     placeholder="12345">
 </label>
 
-<div id="st">ожидание…</div>
-<div id="val"></div><span id="cur">▌</span>
+<div id="st"></div>
+<div id="val"></div>
+<span id="cur">▌</span>
 <div id="txt"></div>
 
 <script>
 "use strict";
-var SPEED = parseInt(
-  localStorage.getItem("type_speed")
-  || "60", 10);
+var LANG =
+  localStorage.getItem("lang")
+  || "ru";
+var T = {
+  ru: {
+    ttl: "▌ Приёмник",
+    back: "← на главную",
+    sid: "sid:",
+    wait: "ожидание…",
+    enter: "введите sid…",
+    match: "совпадение ✔",
+    none: "по этому сиду" +
+      " пока ничего нет",
+    down: "сервер недоступен",
+    upd: "обновлено: "
+  },
+  en: {
+    ttl: "▌ Receiver",
+    back: "← back to home",
+    sid: "sid:",
+    wait: "waiting…",
+    enter: "enter sid…",
+    match: "match ✔",
+    none: "nothing here yet" +
+      " for this sid",
+    down: "server unavailable",
+    upd: "updated: "
+  }
+}[LANG];
+
+document.documentElement.lang = LANG;
+document.getElementById("ttl")
+  .textContent = T.ttl;
+document.getElementById("back")
+  .textContent = T.back;
+document.getElementById("sidLbl")
+  .firstChild.textContent = T.sid
+    + " ";
+
 var sidEl =
   document.getElementById("sid");
 var stEl =
@@ -61,11 +98,15 @@ var curEl =
   document.getElementById("cur");
 var txtEl =
   document.getElementById("txt");
+var SPEED = parseInt(
+  localStorage.getItem("type_speed")
+  || "60", 10);
 var lastSid = "";
 var shownText = "";
 var timer = null;
 
 curEl.style.display = "none";
+stEl.textContent = T.wait;
 
 function clearScreen() {
   clearInterval(timer);
@@ -87,8 +128,7 @@ function typeText(t, when) {
     if (i >= t.length) {
       clearInterval(timer);
       curEl.style.display = "none";
-      txtEl.textContent =
-        "обновлено: " + when;
+      txtEl.textContent = T.upd + when;
     }
   }, SPEED);
 }
@@ -102,8 +142,7 @@ function poll() {
     })
     .then(function (d) {
       if (!mine) {
-        stEl.textContent =
-          "введите sid…";
+        stEl.textContent = T.enter;
         clearScreen();
         lastSid = "";
         return;
@@ -111,24 +150,23 @@ function poll() {
       if (d.sid && d.sid === mine) {
         if (d.sid !== lastSid) {
           stEl.textContent =
-            "совпадение ✔";
+            T.match;
         }
         lastSid = d.sid;
-        if ((d.text || "") !== shownText) {
+        if ((d.text || "") !==
+            shownText) {
           shownText = d.text || "";
           typeText(shownText,
             d.sid_at || "");
         }
       } else {
-        stEl.textContent =
-          "по этому сиду пока ничего нет";
+        stEl.textContent = T.none;
         clearScreen();
         lastSid = "";
       }
     })
     .catch(function () {
-      stEl.textContent =
-        "сервер недоступен";
+      stEl.textContent = T.down;
     });
 }
 
