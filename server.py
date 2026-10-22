@@ -152,9 +152,10 @@ def text():
 
 
 # ---------- часы ----------
-# каждая цифра — свой вход: ?d=0 — десятки, ?d=1 — единицы
-# ответ в JSON, как у /text: {"value": "000011"}
-# обычное число — через &mode=num
+# формат как у intensblapi: 8 бит одним значением,
+# первые 4 бита — десятки, последние 4 — единицы
+# 50 минут -> 01010000, 55 минут -> 01010101, 23 часа -> 00100011
+# offset часового пояса: ?offset=3 или заголовок offset
 
 def _offset():
     try:
@@ -166,57 +167,41 @@ def _offset():
         return 0
 
 
-def _arg_int(name, default):
-    try:
-        return int(request.args.get(name, default))
-    except (ValueError, TypeError):
-        return default
-
-
-def _digit(value, d):
-    s = str(value).zfill(2)
-    try:
-        num = int(s[d])
-    except (IndexError, ValueError):
-        num = 0
-    if request.args.get("mode") == "num":
-        return str(num)
-    return format(num, "06b")
-
-
 def _clock(value):
-    d = _arg_int("d", 0)
-    result = _digit(value, d)
-    if request.args.get("mode") == "num":
-        return result
-    return jsonify({"value": result})
+    s = str(value).zfill(2)
+    bits = format(int(s[0]), "04b") + format(int(s[1]), "04b")
+    return jsonify({"value": bits})
+
+
+def _now(kind):
+    t = time.localtime(
+        time.time() + _offset() * 3600)
+    if kind.startswith("h"):
+        return t.tm_hour
+    if kind.startswith("m"):
+        return t.tm_min
+    return t.tm_sec
 
 
 @app.route("/clock/hours")
 def clock_hours():
-    t = time.localtime(
-        time.time() + _offset() * 3600)
-    return _clock(t.tm_hour)
+    return _clock(_now("hours"))
 
 
 @app.route("/clock/minutes")
 def clock_minutes():
-    t = time.localtime(
-        time.time() + _offset() * 3600)
-    return _clock(t.tm_min)
+    return _clock(_now("minutes"))
 
 
 @app.route("/clock/seconds")
 def clock_seconds():
-    t = time.localtime(
-        time.time() + _offset() * 3600)
-    return _clock(t.tm_sec)
+    return _clock(_now("seconds"))
 
 
 # даже если что-то сломается, игра получит JSON, а не ошибку
 @app.errorhandler(500)
 def server_error(e):
-    return jsonify({"value": "000000"}), 500
+    return jsonify({"value": "00000000"}), 500
 
 
 if __name__ == "__main__":
