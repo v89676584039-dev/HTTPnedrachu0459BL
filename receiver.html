@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+  content="width=device-width,
+  initial-scale=1">
+<title>Приёмник</title>
+<style>
+body{background:#111;color:#0f0;
+  font-family:monospace;
+  padding:30px}
+input{background:#000;color:#0f0;
+  border:1px solid #0f0;
+  padding:6px 10px;width:140px;
+  font-family:monospace}
+h2{color:#0f0}
+#val{margin-top:16px;
+  font-size:1.2rem;color:#ff0;
+  word-break:break-word}
+#txt{margin-top:8px;
+  font-size:14px;
+  white-space:pre-wrap}
+#st{margin-top:10px;
+  font-size:13px;color:#888}
+</style>
+</head>
+<body>
+
+<h2>▌ Приёмник</h2>
+
+<label>sid:
+  <input id="sid"
+    inputmode="numeric"
+    placeholder="12345">
+</label>
+
+<div id="st">ожидание…</div>
+<div id="val"></div>
+<div id="txt"></div>
+
+<script>
+"use strict";
+var sidEl =
+  document.getElementById("sid");
+var stEl =
+  document.getElementById("st");
+var valEl =
+  document.getElementById("val");
+var txtEl =
+  document.getElementById("txt");
+var lastSid = "";
+
+function poll() {
+  fetch("/api/data")
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (d) {
+      var mine =
+        sidEl.value.trim();
+      if (!mine) {
+        stEl.textContent =
+          "введите sid…";
+        valEl.textContent = "";
+        txtEl.textContent = "";
+        lastSid = "";
+        return;
+      }
+      if (d.sid && d.sid === mine) {
+        if (d.sid !== lastSid) {
+          stEl.textContent =
+            "совпадение ✔";
+        }
+        valEl.textContent =
+          d.text || "(пусто)";
+        txtEl.textContent =
+          "обновлено: "
+          + (d.sid_at || "");
+        lastSid = d.sid;
+      } else {
+        stEl.textContent =
+          "сид не совпадает";
+        valEl.textContent = "";
+        txtEl.textContent = "";
+        lastSid = "";
+      }
+    })
+    .catch(function () {
+      stEl.textContent =
+        "сервер недоступен";
+    });
+}
+
+setInterval(poll, 2000);
+poll();
+sidEl.addEventListener("input",
+  poll);
+</script>
+</body>
+</html>
