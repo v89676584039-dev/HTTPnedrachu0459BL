@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+  content="width=device-width,
+  initial-scale=1">
+<title>Typewriter</title>
+<style>
+body{background:#111;color:#0f0;
+  font-family:monospace;
+  padding:30px}
+body.compact{padding:12px}
+h2{color:#0f0}
+a{color:#0f0}
+input,textarea{background:#000;
+  color:#0f0;border:1px solid #0f0;
+  padding:6px 10px;
+  font-family:monospace}
+input{width:140px}
+textarea{width:100%;height:80px;
+  box-sizing:border-box;
+  margin-top:8px;resize:vertical}
+button{background:#000;color:#0f0;
+  border:1px solid #0f0;
+  padding:8px 16px;
+  font-family:monospace;
+  margin-top:10px;cursor:pointer}
+button:hover{background:#0f0;
+  color:#000}
+#prev{margin-top:16px;
+  font-size:1.2rem;color:#ff0;
+  min-height:1.5em;
+  word-break:break-word}
+#cur{color:#ff0;
+  animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+#st{margin-top:10px;
+  font-size:13px;color:#888}
+#url{margin-top:14px;
+  font-size:13px;color:#888;
+  word-break:break-all}
+</style>
+</head>
+<body>
+
+<h2>▌ Typewriter</h2>
+<p><a href="/">← на главную</a></p>
+
+<label>sid:
+  <input id="sid"
+    inputmode="numeric"
+    placeholder="12345">
+</label>
+
+<br><textarea id="txt"
+  placeholder="текст для игры">
+</textarea>
+
+<button id="send">Отправить</button>
+<div id="st"></div>
+
+<div id="prev"></div>
+<span id="cur">▌</span>
+
+<div id="url"></div>
+
+<script>
+"use strict";
+var sidEl =
+  document.getElementById("sid");
+var txtEl =
+  document.getElementById("txt");
+var stEl =
+  document.getElementById("st");
+var prevEl =
+  document.getElementById("prev");
+var curEl =
+  document.getElementById("cur");
+var urlEl =
+  document.getElementById("url");
+var SPEED = parseInt(
+  localStorage.getItem("type_speed")
+  || "60", 10);
+var timer = null;
+
+curEl.style.display = "none";
+urlEl.textContent =
+  "HTTP Transmitter: " +
+  location.origin + "/text?sid=ваш-сид";
+
+document.getElementById("send")
+  .addEventListener("click",
+    function () {
+      var sid = sidEl.value.trim();
+      if (!/^\d+$/.test(sid)) {
+        stEl.textContent =
+          "sid — только цифры";
+        return;
+      }
+      stEl.textContent = "отправка…";
+      fetch("/api/send", {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify({
+          sid: sid,
+          text: txtEl.value
+        })
+      })
+      .then(function (r) {
+        if (r.ok) {
+          stEl.textContent =
+            "отправлено ✔";
+          typeOut(txtEl.value);
+        } else {
+          stEl.textContent =
+            "ошибка отправки";
+        }
+      })
+      .catch(function () {
+        stEl.textContent =
+          "сервер недоступен";
+      });
+    });
+
+function typeOut(t) {
+  clearInterval(timer);
+  prevEl.textContent = "";
+  curEl.style.display = "inline";
+  var i = 0;
+  timer = setInterval(function () {
+    i = i + 1;
+    prevEl.textContent = t.slice(0, i);
+    if (i >= t.length) {
+      clearInterval(timer);
+      curEl.style.display = "none";
+    }
+  }, SPEED);
+}
+
+if (localStorage.getItem("compact")
+    === "1") {
+  document.body.className =
+    "compact";
+}
+</script>
+</body>
+</html>
