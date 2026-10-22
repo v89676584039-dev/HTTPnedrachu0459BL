@@ -10,14 +10,20 @@
 body{background:#111;color:#0f0;
   font-family:monospace;
   padding:30px}
+body.compact{padding:12px}
+h2{color:#0f0}
+a{color:#0f0}
 input{background:#000;color:#0f0;
   border:1px solid #0f0;
   padding:6px 10px;width:140px;
   font-family:monospace}
-h2{color:#0f0}
 #val{margin-top:16px;
   font-size:1.2rem;color:#ff0;
-  word-break:break-word}
+  word-break:break-word;
+  min-height:1.5em}
+#cur{color:#ff0;
+  animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
 #txt{margin-top:8px;
   font-size:14px;
   white-space:pre-wrap}
@@ -28,6 +34,7 @@ h2{color:#0f0}
 <body>
 
 <h2>▌ Приёмник</h2>
+<p><a href="/">← на главную</a></p>
 
 <label>sid:
   <input id="sid"
@@ -36,34 +43,68 @@ h2{color:#0f0}
 </label>
 
 <div id="st">ожидание…</div>
-<div id="val"></div>
+<div id="val"></div><span id="cur">▌</span>
 <div id="txt"></div>
 
 <script>
 "use strict";
+var SPEED = parseInt(
+  localStorage.getItem("type_speed")
+  || "60", 10);
 var sidEl =
   document.getElementById("sid");
 var stEl =
   document.getElementById("st");
 var valEl =
   document.getElementById("val");
+var curEl =
+  document.getElementById("cur");
 var txtEl =
   document.getElementById("txt");
 var lastSid = "";
+var shownText = "";
+var timer = null;
+
+curEl.style.display = "none";
+
+function clearScreen() {
+  clearInterval(timer);
+  valEl.textContent = "";
+  curEl.style.display = "none";
+  txtEl.textContent = "";
+  shownText = "";
+}
+
+function typeText(t, when) {
+  clearInterval(timer);
+  valEl.textContent = "";
+  curEl.style.display = "inline";
+  txtEl.textContent = "";
+  var i = 0;
+  timer = setInterval(function () {
+    i = i + 1;
+    valEl.textContent = t.slice(0, i);
+    if (i >= t.length) {
+      clearInterval(timer);
+      curEl.style.display = "none";
+      txtEl.textContent =
+        "обновлено: " + when;
+    }
+  }, SPEED);
+}
 
 function poll() {
-  fetch("/api/data")
+  var mine = sidEl.value.trim();
+  fetch("/api/data?sid="
+    + encodeURIComponent(mine))
     .then(function (r) {
       return r.json();
     })
     .then(function (d) {
-      var mine =
-        sidEl.value.trim();
       if (!mine) {
         stEl.textContent =
           "введите sid…";
-        valEl.textContent = "";
-        txtEl.textContent = "";
+        clearScreen();
         lastSid = "";
         return;
       }
@@ -72,17 +113,16 @@ function poll() {
           stEl.textContent =
             "совпадение ✔";
         }
-        valEl.textContent =
-          d.text || "(пусто)";
-        txtEl.textContent =
-          "обновлено: "
-          + (d.sid_at || "");
         lastSid = d.sid;
+        if ((d.text || "") !== shownText) {
+          shownText = d.text || "";
+          typeText(shownText,
+            d.sid_at || "");
+        }
       } else {
         stEl.textContent =
-          "сид не совпадает";
-        valEl.textContent = "";
-        txtEl.textContent = "";
+          "по этому сиду пока ничего нет";
+        clearScreen();
         lastSid = "";
       }
     })
@@ -96,6 +136,12 @@ setInterval(poll, 2000);
 poll();
 sidEl.addEventListener("input",
   poll);
+
+if (localStorage.getItem("compact")
+    === "1") {
+  document.body.className =
+    "compact";
+}
 </script>
 </body>
 </html>
