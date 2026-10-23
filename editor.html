@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Редактор анимаций — RGB2 16×16</title>
+<style>
+body{font-family:system-ui,Segoe UI,sans-serif;background:#15171c;color:#e8e8ea;margin:0;padding:16px}
+h1{font-size:20px;margin:0 0 10px}
+.hint{color:#9aa0ab;font-size:13px;max-width:460px}
+.wrap{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px}
+.grid{display:grid;grid-template-columns:repeat(16,22px);grid-auto-rows:22px;gap:1px;background:#2a2d35;padding:4px;width:max-content;user-select:none}
+.cell{width:22px;height:22px;background:#000;cursor:crosshair}
+.palette{display:grid;grid-template-columns:repeat(8,26px);gap:3px;width:max-content;margin:6px 0}
+.pal{width:26px;height:26px;cursor:pointer;border:2px solid transparent}
+.pal.sel{border-color:#fff}
+button{background:#2b62ff;color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer}
+button.gray{background:#3a3f4b}
+.row{margin:8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type=number],input[type=text]{background:#22252d;color:#fff;border:1px solid #3a3f4b;border-radius:6px;padding:6px 8px}
+input[type=text]{width:110px}
+#msg{color:#7ee787;min-height:20px;font-size:14px}
+#fnum{min-width:64px;text-align:center}
+</style>
+</head>
+<body>
+<h1>Редактор анимаций для RGB2 16×16</h1>
+<div class="hint">64 цвета панели: в каждом канале 0, 85, 170 или 255. Левый клик — рисовать выбранным цветом (можно вести с зажатой кнопкой), правый — стереть в чёрный.</div>
+<div class="wrap">
+ <div class="grid" id="grid"></div>
+ <div>
+  <div class="row"><b>Цвет</b> <input type="color" id="pick" value="#5500aa" title="Любой цвет сам прилипнет к ближайшему из 64"></div>
+  <div class="palette" id="palette"></div>
+  <div class="row">
+    <button class="gray" id="prev">◀</button>
+    <span id="fnum">1 / 1</span>
+    <button class="gray" id="next">▶</button>
+  </div>
+  <div class="row">
+    <button class="gray" id="add">+ новый кадр</button>
+    <button class="gray" id="dup">+ копия</button>
+    <button class="gray" id="del">удалить</button>
+    <button class="gray" id="clear">очистить кадр</button>
+  </div>
+  <div class="row">
+    <button class="gray" id="play">проиграть</button>
+    <label>задержка, мс <input type="number" id="ms" value="150" min="30" step="10" style="width:70px"></label>
+  </div>
+  <div class="row">
+    <input type="text" id="sid" placeholder="SID">
+    <button id="start">▶ начать анимацию</button>
+    <button class="gray" id="stop">стоп</button>
+  </div>
+  <div id="msg"></div>
+  <div class="hint" id="addr"></div>
+ </div>
+</div>
+<script>
+"use strict";
+const CH=[0,85,170,255];
+// палитра: индекс 0..63, код = RRGGBB по 2 бита на канал
+const PAL=[];
+for(let r=0;r<4;r++)for(let g=0;g<4;g++)for(let b=0;b<4;b++)
+  PAL.push({css:`rgb(${CH[r]},${CH[g]},${CH[b]})`,
+            code:r.toString(2)+g.toString(2)+b.toString(2)});
+const codeOf=i=>PAL[i].code;
+
+let frames=[new Array(256).fill(0)];
+let cur=0, sel=0, painting=false, erase=false, playing=null;
+
+const grid=document.getElementById("grid");
+const cells=[];
+for(let i=0;i<256;i++){
+  const d=document.createElement("div");
+  d.className="cell";
+  d.addEventListener("mousedown",e=>{e.preventDefault();painting=true;erase=(e.button===2);paint(i);});
+  d.addEventListener("mouseover",()=>{if(painting)paint(i);});
+  d.addEventListener("contextmenu",e=>e.preventDefault());
+  grid.appendChild(d);cells.push(d);
+}
+window.addEventListener("mouseup",()=>painting=false);
+
+function paint(i){frames[cur][i]=erase?0:sel;render();}
+function render(){
+  const f=frames[cur];
+  for(let i=0;i<256;i++)cells[i].style.background=PAL[f[i]].css;
+  document.getElementById("fnum").textContent=(cur+1)+" / "+frames.length;
+}
+function snap(hex){
+  const r=parseInt(hex.substr(1,2),16),g=parseInt(hex.substr(3,2),16),b=parseInt(hex.substr(5,2),16);
+  const near=v=>CH.reduce((a,c)=>Math.abs(c-v)<Math.abs(a-v)?c:a);
+  return (near(r)/85)*16+(near(g)/85)*4+(near(b)/85);
+}
+document.getElementById("pick").addEventListener("input",e=>{sel=snap(e.target.value);marks();});
+const palEl=document.getElementById("palette");
+PAL.forEach((p,i)=>{
+  const d=document.createElement("div");d.className="pal";d.style.background=p.css;
+  d.addEventListener("click",()=>{sel=i;marks();});
+  palEl.appendChild(d);
+});
+function marks(){[...palEl.children].forEach((d,i)=>d.classList.toggle("sel",i===sel));}
+
+document.getElementById("prev").onclick=()=>{cur=(cur-1+frames.length)%frames.length;render();};
+document.getElementById("next").onclick=()=>{cur=(cur+1)%frames.length;render();};
+document.getElementById("add").onclick=()=>{frames.splice(cur+1,0,new Array(256).fill(0));cur++;render();};
+document.getElementById("dup").onclick=()=>{frames.splice(cur+1,0,frames[cur].slice());cur++;render();};
+document.getElementById("del").onclick=()=>{if(frames.length===1){frames=[new Array(256).fill(0)];}else{frames.splice(cur,1);cur=Math.min(cur,frames.length-1);}render();};
+document.getElementById("clear").onclick=()=>{frames[cur]=new Array(256).fill(0);render();};
+
+const playBtn=document.getElementById("play");
+playBtn.onclick=()=>{
+  if(playing){clearInterval(playing);playing=null;playBtn.textContent="проиграть";render();return;}
+  const ms=Math.max(30,parseInt(document.getElementById("ms").value)||150);
+  let f=0;playBtn.textContent="стоп";
+  playing=setInterval(()=>{const fr=frames[f];for(let i=0;i<256;i++)cells[i].style.background=PAL[fr[i]].css;f=(f+1)%frames.length;},ms);
+};
+
+document.getElementById("start").onclick=async()=>{
+  const sid=document.getElementById("sid").value.trim();
+  const msg=document.getElementById("msg");
+  if(!sid){msg.style.color="#ff7b72";msg.textContent="Введите SID";return;}
+  const body={sid,frames:frames.map(f=>f.map(codeOf))};
+  try{
+    const r=await fetch("/api/gif",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(j.ok){
+      msg.style.color="#7ee787";
+      msg.textContent="Анимация запущена: кадров "+j.frames;
+      document.getElementById("addr").textContent="Адрес для передатчика в игре: "+location.origin+"/pixel?sid="+sid;
+    }else{msg.style.color="#ff7b72";msg.textContent="Сервер не принял кадры";}
+  }catch(e){msg.style.color="#ff7b72";msg.textContent="Нет связи с сервером";}
+};
+document.getElementById("stop").onclick=async()=>{
+  const sid=document.getElementById("sid").value.trim();
+  if(!sid)return;
+  await fetch("/api/gif",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid,frames:[]})});
+  const msg=document.getElementById("msg");msg.style.color="#9aa0ab";msg.textContent="Анимация остановлена";
+};
+render();marks();
+</script>
+</body>
+</html>
