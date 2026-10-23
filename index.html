@@ -33,6 +33,12 @@ a{color:#0f0}
 
 <script>
 "use strict";
+// путь к аниматору: если папка
+// называется иначе, поменяйте
+// только эту строку
+var EDITOR_URL =
+  "/animator/editor.html";
+
 var LANG =
   localStorage.getItem("lang")
   || "ru";
@@ -41,12 +47,17 @@ var T = {
     ttl: "▌ Главная",
     sub: "инструменты и API" +
       " для Build Logic :)",
+    g1: "── API ──",
     tw: "Typewriter — отправка" +
       " текста в игру",
     ck: "Real-time Clock API" +
       " — часы",
+    g2: "── Инструменты ──",
+    ed: "Аниматор — кадры" +
+      " для панели RGB2",
     rc: "Приёмник — просмотр" +
       " по сиду",
+    g3: "── Прочее ──",
     st: "Настройки",
     hint: "в HTTP Transmitter" +
       " для текста вставьте адрес" +
@@ -56,11 +67,16 @@ var T = {
     ttl: "▌ Home",
     sub: "tools and API" +
       " for Build Logic :)",
+    g1: "── APIs ──",
     tw: "Typewriter — send" +
       " text into the game",
     ck: "Real-time Clock API" +
       " — clock",
+    g2: "── Tools ──",
+    ed: "Animator — frames" +
+      " for the RGB2 panel",
     rc: "Receiver — view by sid",
+    g3: "── Misc ──",
     st: "Settings",
     hint: "in HTTP Transmitter" +
       " use your site address" +
@@ -79,11 +95,24 @@ document.getElementById("hint")
 var menuEl =
   document.getElementById("menu");
 [
+  [null, T.g1],
   ["/typewriter", T.tw],
   ["/clock", T.ck],
+  [null, T.g2],
+  [EDITOR_URL, T.ed],
   ["/receiver", T.rc],
+  [null, T.g3],
   ["/settings", T.st]
 ].forEach(function (m) {
+  if (!m[0]) {
+    var h =
+      document.createElement("div");
+    h.className = "dim";
+    h.style.marginTop = "14px";
+    h.textContent = m[1];
+    menuEl.appendChild(h);
+    return;
+  }
   var a =
     document.createElement("a");
   a.href = m[0];
