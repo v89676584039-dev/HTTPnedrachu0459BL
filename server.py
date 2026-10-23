@@ -5,6 +5,8 @@ app = Flask(__name__, static_folder=None)
 
 # хранилище: сид -> {"text", "pos", "sid_at"}
 DATA = {}
+# хранилище анимаций: сид -> {"frames", "ms", "t0"}
+ANIMS = {}
 
 # ---------- таблица символов Text Panel ----------
 
@@ -83,6 +85,11 @@ def settings():
     return send_from_directory(".", "settings.html")
 
 
+@app.route("/editor")
+def editor():
+    return send_from_directory(".", "editor.html")
+
+
 # ---------- API для сайта ----------
 
 @app.route("/api/send", methods=["POST"])
@@ -110,6 +117,68 @@ def api_data():
         "sid": sid,
         "text": item["text"],
         "sid_at": item["sid_at"]
+    })
+
+
+# ---------- анимация для панели RGB2 ----------
+# редактор шлёт кадры, игра читает текущий
+
+CH = [0, 85, 170, 255]  # 2 бита на канал
+
+
+def _frame_from_codes(codes):
+    """Код цвета в 6 битах ('rrggbb' по 2 бита на
+    канал) -> список [r, g, b]."""
+    frame = []
+    for c in codes:
+        c = str(c)[:6].ljust(6, "0")
+        try:
+            r = CH[int(c[0:2], 2)]
+            g = CH[int(c[2:4], 2)]
+            b = CH[int(c[4:6], 2)]
+        except ValueError:
+            r = g = b = 0
+        frame.append([r, g, b])
+    return frame
+
+
+@app.route("/api/gif", methods=["POST"])
+def api_gif():
+    body = request.get_json(silent=True) or {}
+    sid = str(body.get("sid", "")).strip()
+    if not sid:
+        return jsonify({"ok": False}), 400
+    raw = body.get("frames")
+    if not raw:  # пустой список — стоп анимации
+        ANIMS.pop(sid, None)
+        return jsonify({"ok": True, "frames": 0})
+    frames = []
+    for f in raw[:600]:  # максимум 600 кадров
+        if isinstance(f, list) and len(f) == 256:
+            frames.append(_frame_from_codes(f))
+    if not frames:
+        return jsonify({"ok": False}), 400
+    ANIMS[sid] = {
+        "frames": frames,
+        "ms": 150,
+        "t0": time.time()
+    }
+    return jsonify({"ok": True, "frames": len(frames)})
+
+
+@app.route("/pixel")
+def pixel():
+    sid = request.args.get("sid", "").strip()
+    a = ANIMS.get(sid)
+    if not a:
+        return jsonify({"ok": False})
+    elapsed = (time.time() - a["t0"]) * 1000
+    i = int(elapsed // a["ms"]) % len(a["frames"])
+    return jsonify({
+        "ok": True,
+        "index": i,
+        "delay": a["ms"],
+        "frame": a["frames"][i]
     })
 
 
