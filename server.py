@@ -122,15 +122,14 @@ def api_data():
 
 # ---------- анимация для панели RGB2 ----------
 # редактор шлёт кадры, игра читает текущий.
-# формат как у печатной машинки: {"value": "0/1"}.
-# первые 8 бит — статус: 10000000 пока анимация идёт,
-# 00000000 когда её нет.
-# дальше 256 пикселей по 6 бит RRGGBB: в каждом канале
-# два бита — яркий (170) и тусклый (85):
-# 11 -> 255, 10 -> 170, 01 -> 85, 00 -> 0.
-# порядок пикселей: по строкам, слева направо, сверху вниз.
-
-NO_FRAME = "00000000" + "0" * (256 * 6)
+# игра опрашивает по ОДНОМУ пикселю за запрос:
+# /pixel?sid=...&px=N -> {"value": "RRGGBB"} — 6 бит
+# пикселя N (0..255, по строкам слева направо,
+# сверху вниз). В каждом канале два бита:
+# яркий (170) и тусклый (85): 11=255, 10=170,
+# 01=85, 00=0.
+# статус: /pixel/status?sid=... -> 10000000 пока
+# идёт анимация, 00000000 когда её нет.
 
 
 @app.route("/api/gif", methods=["POST"])
@@ -168,17 +167,35 @@ def api_gif():
     return jsonify({"ok": True, "frames": len(frames)})
 
 
+def _current_frame(a):
+    elapsed = (time.time() - a["t0"]) * 1000
+    i = int(elapsed // a["ms"]) % len(a["frames"])
+    return a["frames"][i]
+
+
 @app.route("/pixel")
 def pixel():
     sid = request.args.get("sid", "").strip()
     a = ANIMS.get(sid)
     if not a:
-        # value есть всегда, чтобы передатчик
-        # не падал на nil
-        return jsonify({"value": NO_FRAME})
-    elapsed = (time.time() - a["t0"]) * 1000
-    i = int(elapsed // a["ms"]) % len(a["frames"])
-    return jsonify({"value": "10000000" + a["frames"][i]})
+        # пиксель без анимации = чёрный
+        return jsonify({"value": "000000"})
+    px = request.args.get("px", "0")
+    if not px.isdigit():
+        px = "0"
+    n = int(px)
+    if n < 0 or n > 255:
+        return jsonify({"value": "000000"})
+    frame = _current_frame(a)
+    # 6 бит одного пикселя: срез [n*6 : n*6+6]
+    return jsonify({"value": frame[n * 6:n * 6 + 6]})
+
+
+@app.route("/pixel/status")
+def pixel_status():
+    sid = request.args.get("sid", "").strip()
+    a = ANIMS.get(sid)
+    return jsonify({"value": "10000000" if a else "00000000"})
 
 
 # ---------- API для Build Logic ----------
