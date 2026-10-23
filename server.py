@@ -167,6 +167,30 @@ def text():
     return jsonify({"value": "100000" + _code(item["text"], i, True)})
 
 
+# адрес как в гайде intensblapi: /type?sid=... — то же, что /text
+@app.route("/type", methods=["GET", "POST"])
+def type_alias():
+    return text()
+
+
+# статусный вход: смотрит ТЕКУЩУЮ букву, не съедая её.
+# им пользуйтесь для второго передатчика (лампы/статуса),
+# чтобы лишний опрос не пропускал буквы
+@app.route("/status")
+def status_peek():
+    sid = request.args.get("sid", "").strip()
+    if not sid or sid not in DATA:
+        return jsonify({"value": "0" * 14})
+    item = DATA[sid]
+    n = len(item["text"])
+    if n == 0:
+        return jsonify({"value": "0" * 14})
+    i = item.get("pos", 0)
+    if i >= n:
+        return jsonify({"value": "000000" + _code(item["text"], n - 1, False)})
+    return jsonify({"value": "100000" + _code(item["text"], i, True)})
+
+
 # ---------- часы ----------
 # формат как у intensblapi: 8 бит одним значением,
 # первые 4 бита — десятки, последние 4 — единицы
