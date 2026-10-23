@@ -121,25 +121,16 @@ def api_data():
 
 
 # ---------- анимация для панели RGB2 ----------
-# редактор шлёт кадры, игра читает текущий
+# редактор шлёт кадры, игра читает текущий.
+# формат как у печатной машинки: {"value": "0/1"}.
+# первые 8 бит — статус: 10000000 пока анимация идёт,
+# 00000000 когда её нет.
+# дальше 256 пикселей по 6 бит RRGGBB: в каждом канале
+# два бита — яркий (170) и тусклый (85):
+# 11 -> 255, 10 -> 170, 01 -> 85, 00 -> 0.
+# порядок пикселей: по строкам, слева направо, сверху вниз.
 
-CH = [0, 85, 170, 255]  # 2 бита на канал
-
-
-def _frame_from_codes(codes):
-    """Код цвета в 6 битах ('rrggbb' по 2 бита на
-    канал) -> список [r, g, b]."""
-    frame = []
-    for c in codes:
-        c = str(c)[:6].ljust(6, "0")
-        try:
-            r = CH[int(c[0:2], 2)]
-            g = CH[int(c[2:4], 2)]
-            b = CH[int(c[4:6], 2)]
-        except ValueError:
-            r = g = b = 0
-        frame.append([r, g, b])
-    return frame
+NO_FRAME = "00000000" + "0" * (256 * 6)
 
 
 @app.route("/api/gif", methods=["POST"])
@@ -155,12 +146,23 @@ def api_gif():
     frames = []
     for f in raw[:600]:  # максимум 600 кадров
         if isinstance(f, list) and len(f) == 256:
-            frames.append(_frame_from_codes(f))
+            # каждый элемент — код цвета "rrggbb"
+            # по 2 бита на канал, как в редакторе
+            row = []
+            for c in f:
+                c = str(c)[:6].ljust(6, "0")
+                ok = all(ch in "01" for ch in c)
+                row.append(c if ok else "000000")
+            frames.append("".join(row))
     if not frames:
         return jsonify({"ok": False}), 400
+    try:
+        ms = max(30, int(body.get("ms") or 150))
+    except (ValueError, TypeError):
+        ms = 150
     ANIMS[sid] = {
         "frames": frames,
-        "ms": 150,
+        "ms": ms,
         "t0": time.time()
     }
     return jsonify({"ok": True, "frames": len(frames)})
@@ -171,15 +173,12 @@ def pixel():
     sid = request.args.get("sid", "").strip()
     a = ANIMS.get(sid)
     if not a:
-        return jsonify({"ok": False})
+        # value есть всегда, чтобы передатчик
+        # не падал на nil
+        return jsonify({"value": NO_FRAME})
     elapsed = (time.time() - a["t0"]) * 1000
     i = int(elapsed // a["ms"]) % len(a["frames"])
-    return jsonify({
-        "ok": True,
-        "index": i,
-        "delay": a["ms"],
-        "frame": a["frames"][i]
-    })
+    return jsonify({"value": "10000000" + a["frames"][i]})
 
 
 # ---------- API для Build Logic ----------
