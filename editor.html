@@ -24,12 +24,12 @@ input[type=text]{width:110px}
 </style>
 </head>
 <body>
-<h1>Редактор анимаций для RGB2 16×16</h1>
-<div class="hint">64 цвета панели: в каждом канале 0, 85, 170 или 255. Левый клик — рисовать выбранным цветом (можно вести с зажатой кнопкой), правый — стереть в чёрный.</div>
+<h1 id="ttl">Редактор анимаций для RGB2 16×16</h1>
+<div class="hint" id="hint"></div>
 <div class="wrap">
  <div class="grid" id="grid"></div>
  <div>
-  <div class="row"><b>Цвет</b> <input type="color" id="pick" value="#5500aa" title="Любой цвет сам прилипнет к ближайшему из 64"></div>
+  <div class="row"><b id="clabel">Цвет</b> <input type="color" id="pick" value="#5500aa" title=""></div>
   <div class="palette" id="palette"></div>
   <div class="row">
     <button class="gray" id="prev">◀</button>
@@ -37,19 +37,19 @@ input[type=text]{width:110px}
     <button class="gray" id="next">▶</button>
   </div>
   <div class="row">
-    <button class="gray" id="add">+ новый кадр</button>
-    <button class="gray" id="dup">+ копия</button>
-    <button class="gray" id="del">удалить</button>
-    <button class="gray" id="clear">очистить кадр</button>
+    <button class="gray" id="add"></button>
+    <button class="gray" id="dup"></button>
+    <button class="gray" id="del"></button>
+    <button class="gray" id="clear"></button>
   </div>
   <div class="row">
-    <button class="gray" id="play">проиграть</button>
-    <label>задержка, мс <input type="number" id="ms" value="150" min="30" step="10" style="width:70px"></label>
+    <button class="gray" id="play"></button>
+    <label><span id="mslabel"></span> <input type="number" id="ms" value="150" min="30" step="10" style="width:70px"></label>
   </div>
   <div class="row">
     <input type="text" id="sid" placeholder="SID">
-    <button id="start">▶ начать анимацию</button>
-    <button class="gray" id="stop">стоп</button>
+    <button id="start"></button>
+    <button class="gray" id="stop"></button>
   </div>
   <div id="msg"></div>
   <div class="hint" id="addr"></div>
@@ -57,6 +57,69 @@ input[type=text]{width:110px}
 </div>
 <script>
 "use strict";
+var LANG = localStorage.getItem("lang") || "ru";
+var T = {
+  ru: {
+    ttl: "Редактор анимаций для RGB2 16×16",
+    hint: "64 цвета панели: в каждом канале 0, 85, 170 или 255. Левый клик — рисовать выбранным цветом (можно вести с зажатой кнопкой), правый — стереть в чёрный.",
+    clabel: "Цвет",
+    pickTitle: "Любой цвет сам прилипнет к ближайшему из 64",
+    add: "+ новый кадр",
+    dup: "+ копия",
+    del: "удалить",
+    clear: "очистить кадр",
+    play: "проиграть",
+    playStop: "стоп",
+    mslabel: "задержка, мс",
+    start: "▶ начать анимацию",
+    stop: "стоп",
+    needSid: "Введите SID",
+    started: "Анимация запущена: кадров ",
+    addr: "Адрес для передатчика в игре: ",
+    rejected: "Сервер не принял кадры",
+    offline: "Нет связи с сервером",
+    stopped: "Анимация остановлена"
+  },
+  en: {
+    ttl: "Animation editor for RGB2 16×16",
+    hint: "64 panel colors: each channel is 0, 85, 170 or 255. Left click — paint with the selected color (hold and drag works), right click — erase to black.",
+    clabel: "Color",
+    pickTitle: "Any color snaps to the nearest of 64",
+    add: "+ new frame",
+    dup: "+ copy",
+    del: "delete",
+    clear: "clear frame",
+    play: "play",
+    playStop: "stop",
+    mslabel: "delay, ms",
+    start: "▶ start animation",
+    stop: "stop",
+    needSid: "Enter SID",
+    started: "Animation started: frames ",
+    addr: "Address for the in-game transmitter: ",
+    rejected: "Server rejected the frames",
+    offline: "No connection to the server",
+    stopped: "Animation stopped"
+  }
+}[LANG];
+var t = function(k){ return T[k]; };
+
+document.documentElement.lang = LANG;
+document.title = t("ttl");
+document.getElementById("ttl").textContent = t("ttl");
+document.getElementById("hint").textContent = t("hint");
+document.getElementById("clabel").textContent = t("clabel");
+document.getElementById("pick").title = t("pickTitle");
+document.getElementById("add").textContent = t("add");
+document.getElementById("dup").textContent = t("dup");
+document.getElementById("del").textContent = t("del");
+document.getElementById("clear").textContent = t("clear");
+document.getElementById("play").textContent = t("play");
+document.getElementById("mslabel").textContent = t("mslabel");
+document.getElementById("start").textContent = t("start");
+document.getElementById("stop").textContent = t("stop");
+document.getElementById("sid").placeholder = "SID";
+
 const CH=[0,85,170,255];
 // палитра: индекс 0..63, код = RRGGBB по 2 бита на канал
 const PAL=[];
@@ -109,32 +172,32 @@ document.getElementById("clear").onclick=()=>{frames[cur]=new Array(256).fill(0)
 
 const playBtn=document.getElementById("play");
 playBtn.onclick=()=>{
-  if(playing){clearInterval(playing);playing=null;playBtn.textContent="проиграть";render();return;}
+  if(playing){clearInterval(playing);playing=null;playBtn.textContent=t("play");render();return;}
   const ms=Math.max(30,parseInt(document.getElementById("ms").value)||150);
-  let f=0;playBtn.textContent="стоп";
+  let f=0;playBtn.textContent=t("playStop");
   playing=setInterval(()=>{const fr=frames[f];for(let i=0;i<256;i++)cells[i].style.background=PAL[fr[i]].css;f=(f+1)%frames.length;},ms);
 };
 
 document.getElementById("start").onclick=async()=>{
   const sid=document.getElementById("sid").value.trim();
   const msg=document.getElementById("msg");
-  if(!sid){msg.style.color="#ff7b72";msg.textContent="Введите SID";return;}
+  if(!sid){msg.style.color="#ff7b72";msg.textContent=t("needSid");return;}
   const body={sid,frames:frames.map(f=>f.map(codeOf))};
   try{
     const r=await fetch("/api/gif",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const j=await r.json();
     if(j.ok){
       msg.style.color="#7ee787";
-      msg.textContent="Анимация запущена: кадров "+j.frames;
-      document.getElementById("addr").textContent="Адрес для передатчика в игре: "+location.origin+"/pixel?sid="+sid;
-    }else{msg.style.color="#ff7b72";msg.textContent="Сервер не принял кадры";}
-  }catch(e){msg.style.color="#ff7b72";msg.textContent="Нет связи с сервером";}
+      msg.textContent=t("started")+j.frames;
+      document.getElementById("addr").textContent=t("addr")+location.origin+"/pixel?sid="+sid;
+    }else{msg.style.color="#ff7b72";msg.textContent=t("rejected");}
+  }catch(e){msg.style.color="#ff7b72";msg.textContent=t("offline");}
 };
 document.getElementById("stop").onclick=async()=>{
   const sid=document.getElementById("sid").value.trim();
   if(!sid)return;
   await fetch("/api/gif",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid,frames:[]})});
-  const msg=document.getElementById("msg");msg.style.color="#9aa0ab";msg.textContent="Анимация остановлена";
+  const msg=document.getElementById("msg");msg.style.color="#9aa0ab";msg.textContent=t("stopped");
 };
 render();marks();
 </script>
