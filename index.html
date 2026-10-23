@@ -2,100 +2,101 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport"
-  content="width=device-width,
-  initial-scale=1">
-<title>Home</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Панель управления Build Logic</title>
 <style>
-body{background:#111;color:#0f0;
-  font-family:monospace;
-  padding:30px}
-body.compact{padding:12px}
-h2{color:#0f0}
-a{color:#0f0}
-.dim{color:#888;font-size:13px}
-.menu a{display:block;color:#0f0;
-  border:1px solid #0f0;
-  padding:10px;margin:8px 0;
-  text-decoration:none}
-.menu a:hover{background:#0f0;
-  color:#000}
+body{font-family:system-ui,Segoe UI,sans-serif;background:#15171c;color:#e8e8ea;margin:0;padding:24px 16px}
+h1{font-size:22px;margin:0 0 6px}
+.hint{color:#9aa0ab;font-size:13px;max-width:560px}
+.menu{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 28px}
+.tile{display:inline-block;background:#2b62ff;color:#fff;text-decoration:none;border-radius:10px;padding:12px 18px;font-size:15px}
+.tile:hover{background:#3a71ff}
+.block{background:#1d2026;border:1px solid #2a2d35;border-radius:12px;padding:14px 16px;max-width:560px;margin:10px 0}
+.block h2{font-size:16px;margin:0 0 8px}
+.block p{margin:4px 0;color:#c4c8d0;font-size:14px}
+code{background:#262a33;border-radius:6px;padding:2px 6px;font-size:13px;color:#7ee787}
+input,textarea,button{font-family:inherit;font-size:14px}
+input[type=text],textarea{background:#22252d;color:#fff;border:1px solid #3a3f4b;border-radius:8px;padding:10px 12px;width:100%;box-sizing:border-box;resize:vertical}
+textarea{min-height:90px}
+button{background:#2b62ff;color:#fff;border:0;border-radius:8px;padding:10px 16px;cursor:pointer}
+button.gray{background:#3a3f4b}
+label{font-size:13px;color:#9aa0ab}
+#msg{color:#7ee787;min-height:20px;font-size:14px;margin-top:8px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+#log{margin-top:14px;color:#9aa0ab;font-size:13px}
 </style>
 </head>
 <body>
+<h1>Панель управления Build Logic</h1>
+<div class="hint">Отправка текста на печатную машинку, часы, анимация на панель RGB2.</div>
 
-<h2 id="ttl">▌ Главная</h2>
-<p class="dim" id="sub"></p>
+<div class="menu">
+  <a class="tile" href="/typewriter">Машинка</a>
+  <a class="tile" href="/clock">Часы</a>
+  <a class="tile" href="/receiver">Приёмник</a>
+  <a class="tile" href="/settings">Настройки</a>
+  <a class="tile" href="/editor">Анимация</a>
+</div>
 
-<div class="menu" id="menu"></div>
+<div class="block">
+  <h2>Отправка текста</h2>
+  <label for="sid">SID передатчика в игре</label>
+  <input type="text" id="sid" placeholder="например, 67">
+  <div class="row"></div>
+  <label for="text">Текст (латиница, цифры и знаки панели)</label>
+  <textarea id="text" placeholder="Hello world!"></textarea>
+  <div class="row">
+    <button id="send">Отправить</button>
+    <button class="gray" id="stop">Стоп</button>
+  </div>
+  <div id="msg"></div>
+  <div id="log"></div>
+</div>
 
-<p class="dim" id="hint"></p>
+<div class="block">
+  <h2>Как подключить в игре</h2>
+  <p>Машинка: передатчик бьёт на <code>/text?sid=ВАШ_СИД</code> или <code>/type?sid=ВАШ_СИД</code> — 14 бит: 1–6 статус, 7 SHIFT, 8 индикатор печати, 9–14 символ. Второй передатчик (лампы, статус) — на <code>/status?sid=ВАШ_СИД</code>: букву не съедает.</p>
+  <p>Часы: три передатчика — <code>/clock/hours?offset=3</code>, <code>/clock/minutes?offset=3</code>, <code>/clock/seconds?offset=3</code>. По 8 бит: первые четыре — десятки, последние — единицы.</p>
+  <p>Анимация: рисуете кадры в редакторе, а в игре передатчик бьёт на <code>/pixel?sid=ВАШ_СИД</code> — 6 бит цвета клетки на вход Characters панели RGB2.</p>
+</div>
+
+<div class="block">
+  <h2>Важно про сервер</h2>
+  <p>Данные хранятся в памяти: если Render переспит или перезапустится, текст и анимацию нужно отправить заново.</p>
+</div>
 
 <script>
 "use strict";
-var LANG =
-  localStorage.getItem("lang")
-  || "ru";
-var T = {
-  ru: {
-    ttl: "▌ Главная",
-    sub: "инструменты и API" +
-      " для Build Logic :)",
-    tw: "Typewriter — отправка" +
-      " текста в игру",
-    ck: "Real-time Clock API" +
-      " — часы",
-    rc: "Приёмник — просмотр" +
-      " по сиду",
-    st: "Настройки",
-    hint: "в HTTP Transmitter" +
-      " для текста вставьте адрес" +
-      " вашего сайта + /text?sid=ваш-сид"
-  },
-  en: {
-    ttl: "▌ Home",
-    sub: "tools and API" +
-      " for Build Logic :)",
-    tw: "Typewriter — send" +
-      " text into the game",
-    ck: "Real-time Clock API" +
-      " — clock",
-    rc: "Receiver — view by sid",
-    st: "Settings",
-    hint: "in HTTP Transmitter" +
-      " use your site address" +
-      " + /text?sid=your-sid"
-  }
-}[LANG];
+const msg=document.getElementById("msg");
+const log=document.getElementById("log");
+const sent=[];
 
-document.documentElement.lang = LANG;
-document.getElementById("ttl")
-  .textContent = T.ttl;
-document.getElementById("sub")
-  .textContent = T.sub;
-document.getElementById("hint")
-  .textContent = T.hint;
+function say(color,text){msg.style.color=color;msg.textContent=text;}
 
-var menuEl =
-  document.getElementById("menu");
-[
-  ["/typewriter", T.tw],
-  ["/clock", T.ck],
-  ["/receiver", T.rc],
-  ["/settings", T.st]
-].forEach(function (m) {
-  var a =
-    document.createElement("a");
-  a.href = m[0];
-  a.textContent = m[1];
-  menuEl.appendChild(a);
-});
+document.getElementById("send").onclick=async()=>{
+  const sid=document.getElementById("sid").value.trim();
+  const text=document.getElementById("text").value;
+  if(!sid){say("#ff7b72","Введите SID");return;}
+  try{
+    const r=await fetch("/api/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid,text})});
+    const j=await r.json();
+    if(j.ok){
+      say("#7ee787","Отправлено на SID "+sid+" в "+new Date().toLocaleTimeString());
+      sent.push(sid+" ← "+(text||"(пусто)"));
+      log.innerHTML=sent.slice(-5).reverse().join("<br>");
+    }else{say("#ff7b72","Сервер не принял: проверьте SID");}
+  }catch(e){say("#ff7b72","Нет связи с сервером");}
+};
 
-if (localStorage.getItem("compact")
-    === "1") {
-  document.body.className =
-    "compact";
-}
+document.getElementById("stop").onclick=async()=>{
+  const sid=document.getElementById("sid").value.trim();
+  if(!sid){say("#ff7b72","Введите SID");return;}
+  try{
+    await fetch("/api/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid,text:""})});
+    say("#9aa0ab","Текст снят с SID "+sid);
+  }catch(e){say("#ff7b72","Нет связи с сервером");}
+};
 </script>
+
 </body>
 </html>
