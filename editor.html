@@ -29,7 +29,6 @@ input[type=text]{width:110px}
 <div class="wrap">
  <div class="grid" id="grid"></div>
  <div>
-  <div class="row"><b id="clabel">Цвет</b> <input type="color" id="pick" value="#5500aa" title=""></div>
   <div class="palette" id="palette"></div>
   <div class="row">
     <button class="gray" id="prev">◀</button>
@@ -62,8 +61,6 @@ var T = {
   ru: {
     ttl: "Редактор анимаций для RGB2 16×16",
     hint: "64 цвета панели: в каждом канале 0, 85, 170 или 255. Левый клик — рисовать выбранным цветом (можно вести с зажатой кнопкой), правый — стереть в чёрный.",
-    clabel: "Цвет",
-    pickTitle: "Любой цвет сам прилипнет к ближайшему из 64",
     add: "+ новый кадр",
     dup: "+ копия",
     del: "удалить",
@@ -83,8 +80,6 @@ var T = {
   en: {
     ttl: "Animation editor for RGB2 16×16",
     hint: "64 panel colors: each channel is 0, 85, 170 or 255. Left click — paint with the selected color (hold and drag works), right click — erase to black.",
-    clabel: "Color",
-    pickTitle: "Any color snaps to the nearest of 64",
     add: "+ new frame",
     dup: "+ copy",
     del: "delete",
@@ -108,8 +103,6 @@ document.documentElement.lang = LANG;
 document.title = t("ttl");
 document.getElementById("ttl").textContent = t("ttl");
 document.getElementById("hint").textContent = t("hint");
-document.getElementById("clabel").textContent = t("clabel");
-document.getElementById("pick").title = t("pickTitle");
 document.getElementById("add").textContent = t("add");
 document.getElementById("dup").textContent = t("dup");
 document.getElementById("del").textContent = t("del");
@@ -149,12 +142,6 @@ function render(){
   for(let i=0;i<256;i++)cells[i].style.background=PAL[f[i]].css;
   document.getElementById("fnum").textContent=(cur+1)+" / "+frames.length;
 }
-function snap(hex){
-  const r=parseInt(hex.substr(1,2),16),g=parseInt(hex.substr(3,2),16),b=parseInt(hex.substr(5,2),16);
-  const near=v=>CH.reduce((a,c)=>Math.abs(c-v)<Math.abs(a-v)?c:a);
-  return (near(r)/85)*16+(near(g)/85)*4+(near(b)/85);
-}
-document.getElementById("pick").addEventListener("input",e=>{sel=snap(e.target.value);marks();});
 const palEl=document.getElementById("palette");
 PAL.forEach((p,i)=>{
   const d=document.createElement("div");d.className="pal";d.style.background=p.css;
@@ -182,7 +169,8 @@ document.getElementById("start").onclick=async()=>{
   const sid=document.getElementById("sid").value.trim();
   const msg=document.getElementById("msg");
   if(!sid){msg.style.color="#ff7b72";msg.textContent=t("needSid");return;}
-  const body={sid,frames:frames.map(f=>f.map(codeOf))};
+  const body={sid,ms:parseInt(document.getElementById("ms").value)||150,
+    frames:frames.map(f=>f.map(codeOf))};
   try{
     const r=await fetch("/api/gif",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const j=await r.json();
