@@ -5,7 +5,7 @@ app = Flask(__name__, static_folder=None)
 
 # хранилище: сид -> {"text", "pos", "sid_at"}
 DATA = {}
-# хранилище анимаций: сид -> {"frames", "ms", "t0"}
+# хранилище анимаций: сид -> {"frames", "pos"}
 ANIMS = {}
 
 # ---------- таблица символов Text Panel ----------
@@ -121,15 +121,21 @@ def api_data():
 
 
 # ---------- анимация для панели RGB2 ----------
-# редактор шлёт кадры, игра читает текущий.
-# игра опрашивает по ОДНОМУ пикселю за запрос:
-# /pixel?sid=...&px=N -> {"value": "RRGGBB"} — 6 бит
-# пикселя N (0..255, по строкам слева направо,
-# сверху вниз). В каждом канале два бита:
-# яркий (170) и тусклый (85): 11=255, 10=170,
-# 01=85, 00=0.
-# статус: /pixel/status?sid=... -> 10000000 пока
-# идёт анимация, 00000000 когда её нет.
+# работает как печатная машинка, только для пикселей.
+# редактор шлёт кадры, игра опрашивает по ОДНОМУ
+# пикселю за запрос, указатель двигается сам.
+# ответ 14 бит:
+# биты 1-8: статус — 10000000 пока идёт анимация,
+#           00000000 когда всё показано
+# биты 9-14: пиксель RRGGBB — в каждом канале два
+#           бита, яркий (170) и тусклый (85):
+#           11=255, 10=170, 01=85, 00=0
+# нумерация пикселей: по кадрам подряд, внутри кадра
+# по строкам слева направо, сверху вниз.
+# после конца анимации последний пиксель последнего
+# кадра держится на панели, как последняя буква.
+# скорость задаёт не сервер, а частота опроса игрой —
+# как у печатной машинки.
 
 
 @app.route("/api/gif", methods=["POST"])
@@ -155,47 +161,69 @@ def api_gif():
             frames.append("".join(row))
     if not frames:
         return jsonify({"ok": False}), 400
-    try:
-        ms = max(30, int(body.get("ms") or 150))
-    except (ValueError, TypeError):
-        ms = 150
     ANIMS[sid] = {
         "frames": frames,
-        "ms": ms,
-        "t0": time.time()
+        "pos": 0
     }
     return jsonify({"ok": True, "frames": len(frames)})
 
 
-def _current_frame(a):
-    elapsed = (time.time() - a["t0"]) * 1000
-    i = int(elapsed // a["ms"]) % len(a["frames"])
-    return a["frames"][i]
+def _px_bits(a, n):
+    """6 бит пикселя с номером n (по кадрам подряд)."""
+    frame = a["frames"][n // 256]
+    return frame[(n % 256) * 6:(n % 256) * 6 + 6]
 
 
-@app.route("/pixel")
+@app.route("/pixel", methods=["GET", "POST"])
 def pixel():
     sid = request.args.get("sid", "").strip()
+    if not sid:
+        return jsonify({"value": "00000000000000"})
     a = ANIMS.get(sid)
     if not a:
-        # пиксель без анимации = чёрный
-        return jsonify({"value": "000000"})
-    px = request.args.get("px", "0")
-    if not px.isdigit():
-        px = "0"
-    n = int(px)
-    if n < 0 or n > 255:
-        return jsonify({"value": "000000"})
-    frame = _current_frame(a)
-    # 6 бит одного пикселя: срез [n*6 : n*6+6]
-    return jsonify({"value": frame[n * 6:n * 6 + 6]})
+        return jsonify({"value": "00000000000000"})
+
+    # отмотать указатель на начало
+    if request.args.get("reset") == "1":
+        a["pos"] = 0
+        return jsonify({"value": "00000000000000"})
+
+    # подсмотреть конкретный пиксель, не двигая указатель
+    idx = request.args.get("idx", "")
+    if idx.isdigit():
+        j = int(idx)
+        total = len(a["frames"]) * 256
+        if j >= total:
+            j = total - 1
+        return jsonify({"value": "10000000" + _px_bits(a, j)})
+
+    total = len(a["frames"]) * 256
+    i = a["pos"]
+
+    # всё показано: статус гаснет, последний пиксель
+    # последнего кадра держится на панели
+    if i >= total:
+        return jsonify({"value": "00000000" + _px_bits(a, total - 1)})
+
+    # идёт показ: статус горит, указатель двигается
+    a["pos"] = i + 1
+    return jsonify({"value": "10000000" + _px_bits(a, i)})
 
 
+# статусный вход: смотрит ТЕКУЩИЙ пиксель, не съедая
+# его. для второго передатчика (лампы/статуса),
+# чтобы лишний опрос не пропускал пиксели
 @app.route("/pixel/status")
-def pixel_status():
+def pixel_status_peek():
     sid = request.args.get("sid", "").strip()
-    a = ANIMS.get(sid)
-    return jsonify({"value": "10000000" if a else "00000000"})
+    if not sid or sid not in ANIMS:
+        return jsonify({"value": "00000000000000"})
+    a = ANIMS[sid]
+    total = len(a["frames"]) * 256
+    i = a["pos"]
+    if i >= total:
+        return jsonify({"value": "00000000" + _px_bits(a, total - 1)})
+    return jsonify({"value": "10000000" + _px_bits(a, i)})
 
 
 # ---------- API для Build Logic ----------
