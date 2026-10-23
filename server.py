@@ -210,20 +210,19 @@ def pixel():
     return jsonify({"value": "10000000" + _px_bits(a, i)})
 
 
-# статусный вход: смотрит ТЕКУЩИЙ пиксель, не съедая
-# его. для второго передатчика (лампы/статуса),
-# чтобы лишний опрос не пропускал пиксели
+# статусный вход: горит 10000000, пока идёт показ,
+# 00000000, когда всё показано или анимации нет.
+# пиксель не возвращает и указатель не двигает
 @app.route("/pixel/status")
 def pixel_status_peek():
     sid = request.args.get("sid", "").strip()
-    if not sid or sid not in ANIMS:
-        return jsonify({"value": "00000000000000"})
-    a = ANIMS[sid]
+    a = ANIMS.get(sid)
+    if not a:
+        return jsonify({"value": "00000000"})
     total = len(a["frames"]) * 256
-    i = a["pos"]
-    if i >= total:
-        return jsonify({"value": "00000000" + _px_bits(a, total - 1)})
-    return jsonify({"value": "10000000" + _px_bits(a, i)})
+    if a["pos"] >= total:
+        return jsonify({"value": "00000000"})
+    return jsonify({"value": "10000000"})
 
 
 # ---------- API для Build Logic ----------
