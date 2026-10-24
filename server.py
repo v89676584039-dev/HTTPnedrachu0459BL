@@ -1,12 +1,90 @@
 from flask import Flask, request, jsonify, send_from_directory
 import time
+import collections
+import threading
+import os
 
 app = Flask(__name__, static_folder=None)
+app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
 
 # хранилище: сид -> {"text", "pos", "sid_at"}
 DATA = {}
 # хранилище анимаций: сид -> {"frames", "pos"}
 ANIMS = {}
+
+# ---------- защита от флуда и баны ----------
+
+_lock = threading.Lock()
+_hits = collections.defaultdict(collections.deque)
+
+def _allow(key, limit, window):
+    """True, если запрос в лимитах."""
+    now = time.time()
+    with _lock:
+        q = _hits[key]
+        while q and now - q[0] > window:
+            q.popleft()
+        if len(q) >= limit:
+            return False
+        q.append(now)
+        return True
+
+# секретная админка: пароль задаётся переменной
+# окружения ADMIN_KEY на Render, иначе - запасной
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "Zamenite-Menja-2026")
+BAN_TIME = 300  # бан живёт 5 минут
+BLOCKED_IPS = {}   # ip  -> время окончания бана
+BLOCKED_SIDS = {}  # sid -> время окончания бана
+LOG = collections.deque(maxlen=300)
+
+def _banned(storage, key):
+    exp = storage.get(key)
+    if exp is None:
+        return False
+    if time.time() >= exp:  # срок вышел - бан исчезает сам
+        storage.pop(key, None)
+        return False
+    return True
+
+def _sid_from_request():
+    if request.args.get("sid"):
+        return request.args.get("sid")[:64]
+    body = request.get_json(silent=True)
+    if isinstance(body, dict) and "sid" in body:
+        return str(body["sid"])[:64]
+    return ""
+
+@app.before_request
+def guard():
+    if os.environ.get("SHUTDOWN") == "1":
+        return jsonify({"value": "00000000"}), 429
+    ip = (request.headers.get("X-Forwarded-For")
+          or request.remote_addr or "?").split(",")[0].strip()
+    sid = _sid_from_request()
+    reason = ""
+    if _banned(BLOCKED_IPS, ip):
+        reason = "IP заблокирован"
+    elif sid and _banned(BLOCKED_SIDS, sid):
+        reason = "SID заблокирован"
+    elif not _allow("G", 120, 10):
+        reason = "лимит сервера"
+    elif not _allow("ip:" + ip, 40, 10):
+        reason = "флуд с IP"
+    elif sid and not _allow("sid:" + sid, 30, 10):
+        reason = "флуд по SID"
+    LOG.appendleft({
+        "t": time.strftime("%H:%M:%S"),
+        "ip": ip, "sid": sid or "-",
+        "m": request.method, "p": request.path,
+        "r": reason or "ok"
+    })
+    if reason:
+        code = 403 if "заблокирован" in reason else 429
+        return jsonify({"value": "00000000"}), code
+
+def _valid_sid(sid):
+    return bool(sid) and len(sid) <= 64 and all(
+        c.isalnum() or c in "-_" for c in sid)
 
 # ---------- таблица символов Text Panel ----------
 
@@ -43,8 +121,8 @@ SHIFT6.update({
 
 def _code(text, i, busy):
     """Код одного символа в 8 битах:
-    бит 1 — SHIFT, бит 2 — индикатор печати,
-    биты 3-8 — символ."""
+    бит 1 - SHIFT, бит 2 - индикатор печати,
+    биты 3-8 - символ."""
     if i >= len(text):
         if not text:
             return "00000000"
@@ -96,8 +174,8 @@ def editor():
 def api_send():
     body = request.get_json(silent=True) or {}
     sid = str(body.get("sid", "")).strip()
-    text = str(body.get("text", ""))
-    if not sid or not sid.isdigit():
+    text = str(body.get("text", ""))[:5000]
+    if not _valid_sid(sid):
         return jsonify({"ok": False}), 400
     DATA[sid] = {
         "text": text,
@@ -125,9 +203,9 @@ def api_data():
 # редактор шлёт кадры, игра опрашивает по ОДНОМУ
 # пикселю за запрос, указатель двигается сам.
 # ответ ровно 8 бит (под 8 входов передатчика):
-# бит 1: статус — 1 пока идёт анимация,
+# бит 1: статус - 1 пока идёт анимация,
 #        0 когда всё показано (или анимации нет)
-# биты 2-7: пиксель RRGGBB — в каждом канале два
+# биты 2-7: пиксель RRGGBB - в каждом канале два
 #        бита, яркий (170) и тусклый (85):
 #        11=255, 10=170, 01=85, 00=0
 #        входы: 2=красный яркий, 3=красный тусклый,
@@ -140,7 +218,7 @@ def api_data():
 # по строкам слева направо, сверху вниз.
 # после конца анимации последний пиксель последнего
 # кадра держится на панели, как последняя буква.
-# скорость задаёт не сервер, а частота опроса игрой —
+# скорость задаёт не сервер, а частота опроса игрой -
 # как у печатной машинки.
 
 
@@ -148,16 +226,16 @@ def api_data():
 def api_gif():
     body = request.get_json(silent=True) or {}
     sid = str(body.get("sid", "")).strip()
-    if not sid:
+    if not _valid_sid(sid):
         return jsonify({"ok": False}), 400
     raw = body.get("frames")
-    if not raw:  # пустой список — стоп анимации
+    if not raw:  # пустой список - стоп анимации
         ANIMS.pop(sid, None)
         return jsonify({"ok": True, "frames": 0})
     frames = []
     for f in raw[:600]:  # максимум 600 кадров
         if isinstance(f, list) and len(f) == 256:
-            # каждый элемент — код цвета "rrggbb"
+            # каждый элемент - код цвета "rrggbb"
             # по 2 бита на канал, как в редакторе
             row = []
             for c in f:
@@ -217,7 +295,7 @@ def pixel():
 
 
 # статусный вход: горит 1 на первом входе, пока идёт
-# показ, 0 — когда всё показано или анимации нет.
+# показ, 0 - когда всё показано или анимации нет.
 # цвет не возвращает и указатель не двигает
 @app.route("/pixel/status")
 def pixel_status_peek():
@@ -232,8 +310,8 @@ def pixel_status_peek():
 
 
 # ---------- API для Build Logic ----------
-# печатная машинка: ответ 14 бит —
-# биты 1-6: статус — 100000 во время буквы, 000000 когда текст кончился
+# печатная машинка: ответ 14 бит -
+# биты 1-6: статус - 100000 во время буквы, 000000 когда текст кончился
 # бит 7: SHIFT, бит 8: индикатор печати (горит, пока печатается буква)
 # биты 9-14: символ
 # пример: буква m -> 100000 0 1 001101 = 10000001001101
@@ -285,7 +363,7 @@ def text():
     return jsonify({"value": "100000" + _code(item["text"], i, True)})
 
 
-# адрес как в гайде intensblapi: /type?sid=... — то же, что /text
+# адрес как в гайде intensblapi: /type?sid=... - то же, что /text
 @app.route("/type", methods=["GET", "POST"])
 def type_alias():
     return text()
@@ -311,7 +389,7 @@ def status_peek():
 
 # ---------- часы ----------
 # формат как у intensblapi: 8 бит одним значением,
-# первые 4 бита — десятки, последние 4 — единицы
+# первые 4 бита - десятки, последние 4 - единицы
 # 50 минут -> 01010000, 55 минут -> 01010101, 23 часа -> 00100011
 # offset часового пояса: ?offset=3 или заголовок offset
 
@@ -354,6 +432,52 @@ def clock_minutes():
 @app.route("/clock/seconds")
 def clock_seconds():
     return _clock(_now("seconds"))
+
+
+# ---------- секретная админка ----------
+
+def _is_admin():
+    key = request.args.get("key") or ""
+    if not key:
+        body = request.get_json(silent=True)
+        if isinstance(body, dict):
+            key = str(body.get("key", ""))
+    return key == ADMIN_KEY
+
+
+@app.route("/admin")
+def admin_page():
+    return send_from_directory(".", "admin.html")
+
+
+@app.route("/api/admin/data")
+def admin_data():
+    if not _is_admin():
+        return jsonify({"ok": False}), 403
+    now = time.time()
+    ips = {k: max(0, round(v - now))
+           for k, v in BLOCKED_IPS.items() if v > now}
+    sids = {k: max(0, round(v - now))
+            for k, v in BLOCKED_SIDS.items() if v > now}
+    return jsonify({"log": list(LOG)[:100], "ips": ips, "sids": sids})
+
+
+@app.route("/api/admin/block", methods=["POST"])
+def admin_block():
+    if not _is_admin():
+        return jsonify({"ok": False}), 403
+    b = request.get_json(silent=True) or {}
+    typ = b.get("type")
+    val = str(b.get("value", "")).strip()
+    act = b.get("action", "block")
+    if typ not in ("ip", "sid") or not val:
+        return jsonify({"ok": False}), 400
+    storage = BLOCKED_IPS if typ == "ip" else BLOCKED_SIDS
+    if act == "block":
+        storage[val] = time.time() + BAN_TIME
+    else:
+        storage.pop(val, None)
+    return jsonify({"ok": True})
 
 
 # даже если что-то сломается, игра получит JSON, а не ошибку
