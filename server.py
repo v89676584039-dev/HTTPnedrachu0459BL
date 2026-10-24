@@ -35,7 +35,7 @@ def _allow(key, limit, window):
 #  Кавычки должны быть прямыми: "  а не " или "
 #  Пример: ADMIN_KEY = "krasnodar-panel-qw91"
 # ============================================================
-ADMIN_KEY = os.environ.get("ADMIN_KEY", "moi-parol-1234")
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "zxcvbnm0100")
 
 BAN_TIME = 300  # бан живёт 5 минут
 BLOCKED_IPS = {}   # ip  -> время окончания бана
