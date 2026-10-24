@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Панель</title>
+<style>
+  body{font-family:sans-serif;background:#111;color:#eee;margin:16px}
+  h1{font-size:20px}
+  input,button,select{font-size:15px;padding:7px;margin:3px;border-radius:6px;
+    border:1px solid #444;background:#222;color:#eee}
+  button{cursor:pointer}
+  button.block{background:#7a1f1f}button.unblock{background:#1f5a2a}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin-top:12px}
+  th,td{border:1px solid #333;padding:5px 8px;text-align:left}
+  th{background:#1c1c1c}
+  tr.bad td{color:#ff8a8a}
+  #msg{color:#f66;min-height:20px}
+  .tag{display:inline-block;background:#333;border-radius:8px;
+    padding:2px 8px;margin:2px;font-size:13px}
+</style>
+</head>
+<body>
+<h1>🔒 Панель управления</h1>
+<div id="login">
+  <input id="key" type="password" placeholder="Пароль админа">
+  <button onclick="enter()">Войти</button>
+  <div id="msg"></div>
+</div>
+<div id="panel" style="display:none">
+  <h3>Блокировка</h3>
+  <select id="btype"><option value="ip">IP</option><option value="sid">SID</option></select>
+  <input id="bval" placeholder="значение" size="20">
+  <button class="block" onclick="ban('block')">Забанить</button>
+  <button class="unblock" onclick="ban('unblock')">Разбанить</button>
+  <h3>Заблокированные</h3>
+  <div id="blocked"></div>
+  <h3>Последние запросы</h3>
+  <table id="tlog"></table>
+</div>
+<script>
+let KEY="";
+const $=id=>document.getElementById(id);
+function enter(){KEY=$("key").value.trim();refresh();}
+function refresh(){
+  fetch("/api/admin/data?key="+encodeURIComponent(KEY))
+  .then(r=>r.json()).then(d=>{
+    if(!d.ok){$("msg").textContent="Неверный пароль";return;}
+    $("login").style.display="none";$("panel").style.display="block";
+    let rows="<tr><th>время</th><th>IP</th><th>SID</th><th>метод</th><th>адрес</th><th>итог</th></tr>";
+    for(const e of d.log){
+      rows+="<tr"+(e.r!=="ok"?' class="bad"':"")+"><td>"+e.t+"</td><td>"+e.ip+
+        '</td><td><button onclick="quick(\'sid\',\''+e.sid+'\')">🚫</button> '+
+        e.sid+"</td><td>"+e.m+"</td><td>"+e.p+"</td><td>"+e.r+"</td></tr>";
+    }
+    $("tlog").innerHTML=rows;
+    let b="";
+    for(const [i,sec] of Object.entries(d.ips))
+      b+='<span class="tag">IP '+i+' ('+sec+' с) '+
+      ' <button class="unblock" onclick="quick(\'ip\',\''+i+'\',\'unblock\')">✕</button></span>';
+    for(const [s,sec] of Object.entries(d.sids))
+      b+='<span class="tag">SID '+s+' ('+sec+' с) '+
+      ' <button class="unblock" onclick="quick(\'sid\',\''+s+'\',\'unblock\')">✕</button></span>';
+    $("blocked").innerHTML=b||"пусто";
+  });
+}
+function ban(a){quick($("btype").value,$("bval").value.trim(),a);}
+function quick(t,v,a){v=(v||"").trim();if(!v||v==="-")return;
+  fetch("/api/admin/block?key="+encodeURIComponent(KEY),
+    {method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({type:t,value:v,action:a})}).then(refresh);}
+setInterval(refresh,5000);
+</script>
+</body>
+</html>
